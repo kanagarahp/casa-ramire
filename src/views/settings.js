@@ -188,7 +188,7 @@ export function openSettingsModal() {
         const approved = await confirmAction({
           title: 'Factory reset seluruh aplikasi?',
           message:
-            'Semua data termasuk akun kustom dan pengaturan akan dikembalikan ke kondisi awal (akun demo owner/rian). Tindakan ini tidak dapat dibatalkan.',
+            'Semua data termasuk akun kustom dan pengaturan akan dikembalikan ke kondisi awal (akun demo owner/admin). Tindakan ini tidak dapat dibatalkan.',
           confirmText: 'Ya, factory reset',
           danger: true,
         });

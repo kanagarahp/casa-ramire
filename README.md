@@ -34,12 +34,11 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 - Add-on dihitung per bulan dan masuk ke biaya bulanan penghuni.
 - Tagihan yang sudah diverifikasi dapat dibatalkan; saldo penghuni ikut disesuaikan.
 
-## Akun demo
+## Akun awal
 
-| Username | Password | Role |
-| --- | --- | --- |
-| `owner` | `123456` | Owner / Super Admin |
-| `rian` | `123456` | Staf Operasional |
+Akun default diberikan secara terpisah oleh owner dan sengaja tidak ditampilkan
+di halaman login. Segera ganti password melalui **Pengaturan → Ganti password**
+setelah login pertama.
 
 Owner dapat mengakses seluruh menu. Staf tidak dapat membuka **Manajemen Akun**
 dan tidak melihat aksi pemeliharaan data.

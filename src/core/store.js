@@ -8,6 +8,7 @@ const listeners = new Set();
 /** Fill in missing keys so old/corrupt saves never break a new release. */
 function migrate(stored) {
   const base = buildSeedState();
+  const storedVersion = Number(stored.version) || 0;
   const merged = {
     ...base,
     ...stored,
@@ -30,6 +31,29 @@ function migrate(stored) {
     'promos',
   ]) {
     if (!Array.isArray(merged[key])) merged[key] = base[key];
+  }
+
+  // v3: the seeded staff account moved from "rian" to "admin". Rename an
+  // existing saved account (keeping its password/role) or add the new seed.
+  if (storedVersion < 3) {
+    const adminExists = merged.users.some(
+      (user) => String(user.username).toLowerCase() === 'admin',
+    );
+    const legacyStaff = merged.users.find(
+      (user) => String(user.username).toLowerCase() === 'rian',
+    );
+
+    if (!adminExists && legacyStaff) {
+      legacyStaff.username = 'admin';
+      legacyStaff.name = 'Admin (Staf Kasir)';
+    } else if (!adminExists) {
+      const seedAdmin = base.users.find((user) => user.username === 'admin');
+      if (seedAdmin) {
+        const nextId =
+          merged.users.reduce((max, user) => Math.max(max, Number(user.id) || 0), 0) + 1;
+        merged.users.push({ ...seedAdmin, id: nextId });
+      }
+    }
   }
 
   // Drop a stale session that points to a removed/disabled account.

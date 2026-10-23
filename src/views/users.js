@@ -213,7 +213,7 @@ function openUserModal(user = null) {
         </div>
         <div>
           <label class="label" for="usr-username">Username</label>
-          <input id="usr-username" type="text" class="input font-mono" placeholder="cth: rian" value="${esc(user?.username || '')}" ${isEdit ? 'disabled' : ''} required />
+          <input id="usr-username" type="text" class="input font-mono" placeholder="cth: admin" value="${esc(user?.username || '')}" ${isEdit ? 'disabled' : ''} required />
           <p class="hint mt-1">${isEdit ? 'Username tidak dapat diubah.' : '3–20 karakter: huruf, angka, titik, garis bawah, atau strip.'}</p>
         </div>
         ${

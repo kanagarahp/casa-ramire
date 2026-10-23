@@ -60,7 +60,7 @@ test('phone numbers are normalised for WhatsApp', () => {
 });
 
 test('initials ignore punctuation-only words', () => {
-  assert.equal(initials('Rian (Staf Kasir)'), 'RS');
+  assert.equal(initials('Admin (Staf Kasir)'), 'AS');
   assert.equal(initials('Budi Santoso'), 'BS');
   assert.equal(initials(''), '?');
 });

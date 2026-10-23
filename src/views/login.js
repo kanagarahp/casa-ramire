@@ -67,7 +67,7 @@ export function renderLogin() {
                 <label class="label" for="login-username">Username</label>
                 <div class="relative">
                   <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">${icon('UserRound', 'w-4 h-4')}</span>
-                  <input id="login-username" name="username" type="text" class="input pl-9" placeholder="cth: owner" autocomplete="username" required />
+                  <input id="login-username" name="username" type="text" class="input pl-9" placeholder="Masukkan username" autocomplete="username" required />
                 </div>
               </div>
 
@@ -92,21 +92,6 @@ export function renderLogin() {
                 <span>Masuk ke sistem</span>
               </button>
             </form>
-
-            <div class="mt-6 rounded-2xl border border-line bg-cream/60 p-4">
-              <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-600">Akun demo</p>
-              <div class="mt-2 grid grid-cols-2 gap-2">
-                <button type="button" class="btn-outline btn-sm justify-start" data-demo="owner">
-                  ${icon('ShieldCheck', 'w-4 h-4 text-brand')}
-                  <span class="text-left leading-tight">Owner<br><span class="text-[10px] font-semibold text-stone-600">owner / 123456</span></span>
-                </button>
-                <button type="button" class="btn-outline btn-sm justify-start" data-demo="staff">
-                  ${icon('UserRound', 'w-4 h-4 text-brand')}
-                  <span class="text-left leading-tight">Staf<br><span class="text-[10px] font-semibold text-stone-600">rian / 123456</span></span>
-                </button>
-              </div>
-              <p class="hint mt-2">Klik kartu untuk mengisi otomatis, lalu tekan Masuk.</p>
-            </div>
           </div>
         </div>
       </div>
@@ -139,16 +124,6 @@ export function bindLogin(root) {
     passwordInput.type = isHidden ? 'text' : 'password';
     button.innerHTML = icon(isHidden ? 'EyeOff' : 'Eye', 'w-4 h-4');
     button.setAttribute('aria-label', isHidden ? 'Sembunyikan password' : 'Tampilkan password');
-  });
-
-  root.querySelectorAll('[data-demo]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const isOwner = button.dataset.demo === 'owner';
-      usernameInput.value = isOwner ? 'owner' : 'rian';
-      passwordInput.value = '123456';
-      hideError();
-      passwordInput.focus();
-    });
   });
 
   form.addEventListener('submit', (event) => {

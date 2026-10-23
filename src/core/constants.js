@@ -6,7 +6,7 @@
 export const APP_NAME = 'Casa Ramire';
 export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const SESSION_KEY = 'casa-ramire:session';
 
 export const ROLES = {
@@ -52,8 +52,8 @@ export const DEFAULT_USERS = [
     role: 'owner',
   },
   {
-    name: 'Rian (Staf Kasir)',
-    username: 'rian',
+    name: 'Admin (Staf Kasir)',
+    username: 'admin',
     password: '123456',
     role: 'staff',
   },
