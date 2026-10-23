@@ -119,28 +119,30 @@ sesuai dokumentasi GitHub. Saat ini deployment dilakukan lewat branch
 
 ## Deploy ke Vercel
 
-**Produksi:** https://casa-ramire.vercel.app/  
-**Domain:** https://casaramire.com/ *(menunggu konfigurasi DNS di registrar)*
+**Produksi:** https://www.casaramire.com/  
+**Apex:** https://casaramire.com/ → `308` ke `www.casaramire.com`  
+**Dashboard:** https://vercel.com/yan-dev2/casa-ramire
 
-[Impor repositori ini ke Vercel →](https://vercel.com/new/import?s=https%3A%2F%2Fgithub.com%2Fkanagarahp%2Fcasa-ramire)
+Project Vercel `casa-ramire` sudah terhubung ke repo GitHub ini. Setiap push ke
+branch `main` otomatis memicu deployment production.
 
-Repositori ini siap diimpor langsung ke Vercel. Konfigurasi di `vercel.json`
-sudah menetapkan:
+Konfigurasi `vercel.json` menetapkan:
 
 - Framework: **Vite**
 - Build command: `npm run build`
 - Output directory: `dist`
 - Cache immutable untuk aset ber-hash di `/assets/*`
-
-Langkah di dashboard Vercel:
-
-1. **Add New → Project**, lalu impor `kanagarahp/casa-ramire`.
-2. Biarkan pengaturan build mengikuti `vercel.json`, lalu klik **Deploy**.
-3. Setelah deploy pertama berhasil, buka **Settings → Domains** untuk
-   menambahkan domain sendiri dan mengikuti instruksi DNS dari Vercel.
+- Header keamanan dasar (`nosniff`, `Referrer-Policy`)
 
 Tidak diperlukan rewrite SPA karena navigasi aplikasi memakai hash
 (`#/dashboard`), sehingga semua rute tetap dilayani oleh `index.html`.
+
+## Dokumentasi handoff
+
+Catatan lengkap pekerjaan 23 Oktober 2026, status deployment, domain, dan
+langkah lanjutan ada di:
+
+[`docs/HANDOFF-2026-10-23.md`](docs/HANDOFF-2026-10-23.md)
 
 ## Lisensi
 
