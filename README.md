@@ -57,6 +57,7 @@ npm run dev      # http://localhost:5173
 npm run build    # hasil produksi di dist/
 npm run preview  # pratinjau hasil build
 npm test         # unit test (node:test)
+npm run deploy   # terbitkan dist/ ke branch gh-pages
 ```
 
 ## Struktur proyek
@@ -95,17 +96,26 @@ Buka **Pengaturan → Cadangan & pemulihan data**:
 
 ## Deploy ke GitHub Pages
 
-Workflow `.github/workflows/deploy.yml` otomatis membangun dan menerbitkan situs
-setiap kali `main` diperbarui.
+Situs diterbitkan dari branch `gh-pages` (source: **Deploy from a branch →
+`gh-pages` / root**). Setiap kali aplikasi diperbarui:
 
-1. Buat repositori GitHub, lalu push proyek ini.
-2. Buka **Settings → Pages** dan pilih **Source: GitHub Actions**.
-3. Push ke `main` (atau jalankan workflow secara manual).
-4. Situs tersedia di `https://<username>.github.io/<repo>/`.
+```bash
+npm run deploy
+```
+
+Perintah tersebut membangun ulang `dist/` lalu mendorong hasilnya ke branch
+`gh-pages`. Dengan begitu branch `main` tetap berisi kode sumber yang bersih.
 
 `vite.config.js` memakai `base: './'` sehingga build tetap berjalan di sub-path
 GitHub Pages. Routing memakai hash (`#/dashboard`) agar tidak memerlukan
-konfigurasi rewrite server.
+konfigurasi rewrite server. Situs tersedia di:
+
+**https://kanagarahp.github.io/casa-ramire/**
+
+Untuk otomatisasi penuh melalui GitHub Actions, tambahkan scope `workflow` ke
+kredensial GitHub (`gh auth refresh -s workflow`) lalu pulihkan workflow Pages
+sesuai dokumentasi GitHub. Saat ini deployment dilakukan lewat branch
+`gh-pages` agar tidak bergantung pada scope tersebut.
 
 ## Lisensi
 
