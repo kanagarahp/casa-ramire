@@ -89,7 +89,7 @@ function occupantHtml(room, tenant) {
         ${avatar(tenant.name, 'w-7 h-7 text-[9px]')}
         <span class="min-w-0">
           <span class="block text-xs font-bold text-stone-800 truncate">${esc(tenant.name)}</span>
-          <span class="block text-[10px] text-stone-400">Penghuni aktif</span>
+          <span class="block text-[10px] text-stone-600">Penghuni aktif</span>
         </span>
       </button>`;
   }
@@ -103,7 +103,7 @@ function occupantHtml(room, tenant) {
         </span>
       </button>`;
   }
-  return `<span class="text-xs text-stone-400 italic">Siap dihuni</span>`;
+  return `<span class="text-xs text-stone-600 italic">Siap dihuni</span>`;
 }
 
 function gridHtml(rooms, tenantsById) {
@@ -123,15 +123,15 @@ function gridHtml(rooms, tenantsById) {
           <div class="card border-t-4 ${STATUS_ACCENT[room.status] || 'border-t-stone-300'} p-5 rounded-2xl card-hover flex flex-col">
             <div class="flex items-center justify-between gap-2 mb-2">
               ${statusBadge(room.status)}
-              <span class="text-[10px] font-bold uppercase tracking-wider text-stone-400">Lantai ${esc(room.lantai)}</span>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-stone-600">Lantai ${esc(room.lantai)}</span>
             </div>
             <div class="flex items-end justify-between gap-2">
               <div>
-                <h3 class="text-2xl font-black text-stone-800 leading-none">Kamar ${esc(room.nomor)}</h3>
+                <h2 class="text-2xl font-black text-stone-800 leading-none">Kamar ${esc(room.nomor)}</h2>
                 <p class="text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-1">Deluxe</p>
               </div>
               <div class="text-right">
-                <p class="text-[9px] text-stone-400 font-bold uppercase tracking-wider">Tarif / bulan</p>
+                <p class="text-[9px] text-stone-600 font-bold uppercase tracking-wider">Tarif / bulan</p>
                 <p class="text-sm font-black text-stone-700">${roomRate(room)}</p>
               </div>
             </div>
@@ -216,7 +216,7 @@ export function render(root) {
 
           <div class="ml-auto flex items-center gap-2 w-full sm:w-auto">
             <div class="relative flex-1 sm:w-56">
-              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">${icon('Search', 'w-3.5 h-3.5')}</span>
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-600">${icon('Search', 'w-3.5 h-3.5')}</span>
               <input id="room-search" type="search" class="input input-sm pl-8" placeholder="Cari kamar / penghuni…" value="${esc(searchTerm)}" />
             </div>
             <div class="flex bg-stone-100 rounded-xl p-1 shrink-0">
@@ -229,7 +229,7 @@ export function render(root) {
 
       <div id="rooms-content"></div>
 
-      <div class="mt-5 flex flex-wrap items-center gap-3 text-[10px] font-semibold text-stone-400">
+      <div class="mt-5 flex flex-wrap items-center gap-3 text-[10px] font-semibold text-stone-600">
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Terisi</span>
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span> Booking</span>
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Kosong</span>

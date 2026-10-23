@@ -12,7 +12,7 @@ const FEATURES = [
 
 export function renderLogin() {
   return `
-    <div class="min-h-dvh flex items-center justify-center p-4 sm:p-6">
+    <main class="min-h-dvh flex items-center justify-center p-4 sm:p-6">
       <div class="w-full max-w-4xl card overflow-hidden rounded-3xl shadow-xl animate-in">
         <div class="grid lg:grid-cols-2">
           <div class="bg-brand text-white p-8 lg:p-10 flex flex-col justify-between relative overflow-hidden">
@@ -27,9 +27,9 @@ export function renderLogin() {
                   <p class="text-[10px] font-bold text-gold uppercase tracking-[0.22em]">Property Management OS</p>
                 </div>
               </div>
-              <h1 class="text-2xl lg:text-3xl font-black mt-8 tracking-tight text-balance">
+              <p class="text-2xl lg:text-3xl font-black mt-8 tracking-tight text-balance">
                 Kelola kos Anda dengan tenang.
-              </h1>
+              </p>
               <p class="text-sm text-stone-300 mt-2 leading-relaxed">
                 Dari kamar kosong sampai laporan laba rugi — semua tercatat, rapi, dan siap dipakai.
               </p>
@@ -50,7 +50,7 @@ export function renderLogin() {
               ).join('')}
             </ul>
 
-            <p class="relative text-[10px] text-stone-500 mt-8">
+            <p class="relative text-[10px] text-stone-300 mt-8">
               © ${new Date().getFullYear()} Casa Ramire · Data tersimpan di perangkat ini
             </p>
           </div>
@@ -58,8 +58,8 @@ export function renderLogin() {
           <div class="p-7 sm:p-10 bg-white">
             <div class="mb-6">
               <span class="badge-gold">Masuk ke sistem</span>
-              <h2 class="text-2xl font-black text-stone-800 mt-3 tracking-tight">Selamat datang kembali 👋</h2>
-              <p class="text-sm text-stone-500 mt-1">Gunakan akun yang diberikan owner untuk melanjutkan.</p>
+              <h1 class="text-2xl font-black text-stone-800 mt-3 tracking-tight">Selamat datang kembali 👋</h1>
+              <p class="text-sm text-stone-600 mt-1">Gunakan akun yang diberikan owner untuk melanjutkan.</p>
             </div>
 
             <form id="login-form" class="space-y-4" novalidate>
@@ -94,15 +94,15 @@ export function renderLogin() {
             </form>
 
             <div class="mt-6 rounded-2xl border border-line bg-cream/60 p-4">
-              <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">Akun demo</p>
+              <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-600">Akun demo</p>
               <div class="mt-2 grid grid-cols-2 gap-2">
                 <button type="button" class="btn-outline btn-sm justify-start" data-demo="owner">
                   ${icon('ShieldCheck', 'w-4 h-4 text-brand')}
-                  <span class="text-left leading-tight">Owner<br><span class="text-[10px] font-semibold text-stone-500">owner / 123456</span></span>
+                  <span class="text-left leading-tight">Owner<br><span class="text-[10px] font-semibold text-stone-600">owner / 123456</span></span>
                 </button>
                 <button type="button" class="btn-outline btn-sm justify-start" data-demo="staff">
                   ${icon('UserRound', 'w-4 h-4 text-brand')}
-                  <span class="text-left leading-tight">Staf<br><span class="text-[10px] font-semibold text-stone-500">rian / 123456</span></span>
+                  <span class="text-left leading-tight">Staf<br><span class="text-[10px] font-semibold text-stone-600">rian / 123456</span></span>
                 </button>
               </div>
               <p class="hint mt-2">Klik kartu untuk mengisi otomatis, lalu tekan Masuk.</p>
@@ -110,7 +110,7 @@ export function renderLogin() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   `;
 }
 

@@ -55,7 +55,7 @@ function rowHtml(tenant) {
           ${avatar(tenant.name, 'w-9 h-9 text-[10px]')}
           <div class="min-w-0">
             <button type="button" class="font-bold text-stone-800 hover:text-brand hover:underline text-left" data-action="detail" data-id="${tenant.id}">${esc(tenant.name)}</button>
-            <p class="text-[10px] text-stone-400 truncate">${esc(tenant.job || '—')} · ${esc(tenant.phone)}</p>
+            <p class="text-[10px] text-stone-600 truncate">${esc(tenant.job || '—')} · ${esc(tenant.phone)}</p>
           </div>
         </div>
       </td>
@@ -118,7 +118,7 @@ export function render(root) {
           <button type="button" class="chip-idle" data-filter="semua">Semua (${tenants.length})</button>
         </div>
         <div class="relative sm:ml-auto sm:w-64">
-          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">${icon('Search', 'w-3.5 h-3.5')}</span>
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-600">${icon('Search', 'w-3.5 h-3.5')}</span>
           <input id="tenant-search" type="search" class="input input-sm pl-8" placeholder="Cari nama / kamar / HP…" value="${esc(searchTerm)}" />
         </div>
       </div>

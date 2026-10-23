@@ -119,6 +119,9 @@ sesuai dokumentasi GitHub. Saat ini deployment dilakukan lewat branch
 
 ## Deploy ke Vercel
 
+**Produksi:** https://casa-ramire.vercel.app/  
+**Domain:** https://casaramire.com/ *(menunggu konfigurasi DNS di registrar)*
+
 [Impor repositori ini ke Vercel →](https://vercel.com/new/import?s=https%3A%2F%2Fgithub.com%2Fkanagarahp%2Fcasa-ramire)
 
 Repositori ini siap diimpor langsung ke Vercel. Konfigurasi di `vercel.json`

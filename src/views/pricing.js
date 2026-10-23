@@ -23,7 +23,7 @@ function rateCard(floor, rates) {
     <div class="card p-5 rounded-2xl">
       <div class="flex items-start justify-between gap-3 border-b border-line pb-3 mb-4">
         <div>
-          <h3 class="font-black text-lg text-stone-800">Pricelist Lantai ${floor}</h3>
+          <h2 class="font-black text-lg text-stone-800">Pricelist Lantai ${floor}</h2>
           <p class="text-xs text-stone-500">Kamar Deluxe ${floor === '2' ? '201 – 221' : '301 – 321'}</p>
         </div>
         <button type="button" class="btn-primary btn-sm" data-save-floor="${floor}">${icon('Check', 'w-4 h-4')} Simpan</button>
@@ -34,7 +34,7 @@ function rateCard(floor, rates) {
           <div>
             <label class="label" for="rate-${floor}-${period.key}">${period.label}</label>
             <div class="relative">
-              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-stone-400">Rp</span>
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-stone-600">Rp</span>
               <input
                 id="rate-${floor}-${period.key}"
                 type="number"
@@ -82,7 +82,7 @@ export function render(root) {
       <div class="card overflow-hidden">
         <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-line">
           <div>
-            <h3 class="font-extrabold text-stone-800 text-sm">Daftar Promo</h3>
+            <h2 class="font-extrabold text-stone-800 text-sm">Daftar Promo</h2>
             <p class="text-xs text-stone-500 mt-0.5">Diskon rupiah dihitung per bulan kontrak.</p>
           </div>
           <span class="badge-gold">${promos.filter((promo) => promo.active).length} aktif</span>

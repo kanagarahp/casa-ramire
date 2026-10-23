@@ -150,7 +150,7 @@ function invoicesSection() {
                             <td class="font-mono text-[11px] font-bold text-stone-700 whitespace-nowrap">${esc(invoice.number)}</td>
                             <td>
                               <p class="font-bold text-stone-800">${esc(invoice.tenantName || '—')}</p>
-                              <p class="text-[10px] text-stone-400">Kamar ${esc(invoice.roomNumber || '—')}</p>
+                              <p class="text-[10px] text-stone-600">Kamar ${esc(invoice.roomNumber || '—')}</p>
                             </td>
                             <td class="font-semibold text-stone-700">${esc(invoice.item)}</td>
                             <td class="font-black text-stone-800 whitespace-nowrap">${rupiah(invoice.amount)}</td>
@@ -218,13 +218,13 @@ function accrualSection() {
                         <tr>
                           <td>
                             <p class="font-bold text-stone-800">${esc(row.name)}</p>
-                            <p class="text-[10px] text-stone-400">Kamar ${esc(row.roomNumber)}</p>
+                            <p class="text-[10px] text-stone-600">Kamar ${esc(row.roomNumber)}</p>
                           </td>
                           <td class="font-bold whitespace-nowrap">${rupiah(row.paid)}</td>
                           <td class="whitespace-nowrap">${rupiah(row.monthlyCharge)}</td>
                           <td class="font-black text-emerald-700 whitespace-nowrap">${rupiah(row.recognized)}</td>
                           <td class="font-bold text-amber-700 whitespace-nowrap">${rupiah(row.deferred)}</td>
-                          <td class="font-bold whitespace-nowrap ${row.outstanding > 0 ? 'text-rose-700' : 'text-stone-400'}">${row.outstanding > 0 ? rupiah(row.outstanding) : '—'}</td>
+                          <td class="font-bold whitespace-nowrap ${row.outstanding > 0 ? 'text-rose-700' : 'text-stone-600'}">${row.outstanding > 0 ? rupiah(row.outstanding) : '—'}</td>
                         </tr>`,
                       )
                       .join('')
@@ -248,7 +248,7 @@ function pnlSection() {
       <div class="card p-6 space-y-4">
         <div class="flex items-center justify-between border-b border-line pb-3">
           <div>
-            <h3 class="font-extrabold text-stone-800">Laporan Laba Rugi</h3>
+            <h2 class="font-extrabold text-stone-800">Laporan Laba Rugi</h2>
             <p class="text-xs text-stone-500">Periode ${monthLabel}</p>
           </div>
           <span class="badge-gold">P&amp;L</span>
@@ -269,7 +269,7 @@ function pnlSection() {
       <div class="card p-6 space-y-4">
         <div class="flex items-center justify-between border-b border-line pb-3">
           <div>
-            <h3 class="font-extrabold text-stone-800">Komposisi Pengeluaran</h3>
+            <h2 class="font-extrabold text-stone-800">Komposisi Pengeluaran</h2>
             <p class="text-xs text-stone-500">Berdasarkan kategori · ${monthLabel}</p>
           </div>
           <span class="badge-gray">${pnl.expenseByCategory.length} kategori</span>

@@ -34,7 +34,7 @@ export function render(root) {
 
       <div class="card overflow-hidden">
         <div class="px-5 py-4 border-b border-line">
-          <h3 class="font-extrabold text-stone-800 text-sm">Daftar Layanan</h3>
+          <h2 class="font-extrabold text-stone-800 text-sm">Daftar Layanan</h2>
           <p class="text-xs text-stone-500 mt-0.5">Tarif add-on dihitung per bulan dan otomatis masuk ke tagihan sewa.</p>
         </div>
         <div class="table-wrap">

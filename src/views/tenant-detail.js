@@ -92,7 +92,7 @@ export function openTenantDetail(tenantId) {
         <div class="flex flex-wrap items-center gap-3">
           ${avatar(tenant.name, 'w-12 h-12 text-sm')}
           <div class="min-w-0 flex-1">
-            <h3 class="font-black text-stone-800 text-lg leading-tight">${esc(tenant.name)}</h3>
+            <h2 class="font-black text-stone-800 text-lg leading-tight">${esc(tenant.name)}</h2>
             <p class="text-xs text-stone-500 mt-0.5">
               ${isActive ? `Kamar ${esc(room?.nomor || tenant.roomNumber || '—')} · ${esc(tenant.periode || '')} ${tenant.periode === 'harian' ? 'hari' : tenant.periode === 'mingguan' ? 'minggu' : 'bulan'}` : 'Sudah check-out'}
             </p>
@@ -103,10 +103,10 @@ export function openTenantDetail(tenantId) {
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-xs">
-          <div><p class="text-stone-400 font-bold uppercase text-[9px]">Mulai</p><p class="font-bold text-stone-700">${formatDate(tenant.startDate)}</p></div>
-          <div><p class="text-stone-400 font-bold uppercase text-[9px]">Berakhir</p><p class="font-bold text-stone-700">${formatDate(tenant.endDate)}</p></div>
-          <div><p class="text-stone-400 font-bold uppercase text-[9px]">Nilai kontrak</p><p class="font-bold text-stone-700">${rupiah(tenant.contractTotal)}</p></div>
-          <div><p class="text-stone-400 font-bold uppercase text-[9px]">Sisa tagihan</p><p class="font-bold ${outstanding > 0 ? 'text-rose-700' : 'text-emerald-700'}">${rupiah(outstanding)}</p></div>
+          <div><p class="text-stone-600 font-bold uppercase text-[9px]">Mulai</p><p class="font-bold text-stone-700">${formatDate(tenant.startDate)}</p></div>
+          <div><p class="text-stone-600 font-bold uppercase text-[9px]">Berakhir</p><p class="font-bold text-stone-700">${formatDate(tenant.endDate)}</p></div>
+          <div><p class="text-stone-600 font-bold uppercase text-[9px]">Nilai kontrak</p><p class="font-bold text-stone-700">${rupiah(tenant.contractTotal)}</p></div>
+          <div><p class="text-stone-600 font-bold uppercase text-[9px]">Sisa tagihan</p><p class="font-bold ${outstanding > 0 ? 'text-rose-700' : 'text-emerald-700'}">${rupiah(outstanding)}</p></div>
         </div>
       </div>
 
@@ -194,7 +194,7 @@ export function openTenantDetail(tenantId) {
             <p class="font-black text-rose-900 text-lg">${rupiah(unpaidTotal)}</p>
           </div>
           <div class="rounded-2xl border border-line bg-white p-3">
-            <p class="text-[10px] font-bold uppercase tracking-wider text-stone-400">Nilai kontrak</p>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-stone-600">Nilai kontrak</p>
             <p class="font-black text-stone-800 text-lg">${rupiah(tenant.contractTotal)}</p>
           </div>
         </div>
@@ -209,14 +209,14 @@ export function openTenantDetail(tenantId) {
                       .map(
                         (payment) => `
                         <tr>
-                          <td class="font-semibold text-stone-700">${esc(payment.label)}<p class="text-[10px] text-stone-400">${esc(payment.note || '')}</p></td>
+                          <td class="font-semibold text-stone-700">${esc(payment.label)}<p class="text-[10px] text-stone-600">${esc(payment.note || '')}</p></td>
                           <td class="whitespace-nowrap">${formatDateTime(payment.date)}</td>
                           <td class="font-bold ${payment.status === 'paid' ? 'text-stone-800' : 'text-rose-700'}">${rupiah(payment.amount)}</td>
                           <td>${billBadge(payment.status)}</td>
                         </tr>`,
                       )
                       .join('')
-                  : `<tr><td colspan="4" class="text-center py-8 text-stone-400">Belum ada riwayat pembayaran.</td></tr>`
+                  : `<tr><td colspan="4" class="text-center py-8 text-stone-600">Belum ada riwayat pembayaran.</td></tr>`
               }
             </tbody>
           </table>

@@ -39,7 +39,7 @@ function checkinRows(checkins) {
           <td class="font-black text-stone-800 whitespace-nowrap">${esc(room.nomor)}</td>
           <td>
             <button type="button" class="font-bold text-stone-800 hover:text-brand hover:underline text-left" data-action="tenant-booking" data-room="${room.id}">${esc(booking.name)}</button>
-            <p class="text-[10px] text-stone-400">${esc(booking.phone)}</p>
+            <p class="text-[10px] text-stone-600">${esc(booking.phone)}</p>
           </td>
           <td class="whitespace-nowrap">${formatDate(booking.startDate)}</td>
           <td>${isPaid ? '<span class="badge-green">Lunas</span>' : '<span class="badge-amber">DP</span>'}</td>
@@ -96,15 +96,15 @@ function cashflowChart(trend) {
   return `
     <div class="flex flex-wrap items-center justify-between gap-3 mb-5 text-xs">
       <div>
-        <p class="text-[10px] font-bold uppercase tracking-wider text-stone-400">Kas masuk bulan ini</p>
+        <p class="text-[10px] font-bold uppercase tracking-wider text-stone-600">Kas masuk bulan ini</p>
         <p class="font-black text-emerald-700 text-base">${rupiah(current.income)}</p>
       </div>
       <div>
-        <p class="text-[10px] font-bold uppercase tracking-wider text-stone-400">Kas keluar</p>
+        <p class="text-[10px] font-bold uppercase tracking-wider text-stone-600">Kas keluar</p>
         <p class="font-black text-rose-700 text-base">${rupiah(current.expense)}</p>
       </div>
       <div>
-        <p class="text-[10px] font-bold uppercase tracking-wider text-stone-400">Net</p>
+        <p class="text-[10px] font-bold uppercase tracking-wider text-stone-600">Net</p>
         <p class="font-black text-stone-800 text-base">${rupiah(current.net)}</p>
       </div>
     </div>
@@ -119,7 +119,7 @@ function cashflowChart(trend) {
                 <div class="w-3 rounded-t-md bg-emerald-500/90 transition-all" style="height:${incomeHeight}%" title="Masuk ${rupiah(item.income)}"></div>
                 <div class="w-3 rounded-t-md bg-rose-400/90 transition-all" style="height:${expenseHeight}%" title="Keluar ${rupiah(item.expense)}"></div>
               </div>
-              <span class="text-[9px] font-bold uppercase tracking-wider text-stone-400">${esc(item.label)}</span>
+              <span class="text-[9px] font-bold uppercase tracking-wider text-stone-600">${esc(item.label)}</span>
             </div>`;
         })
         .join('')}
@@ -132,7 +132,7 @@ function cashflowChart(trend) {
 }
 
 function floorList(floors) {
-  if (!floors.length) return `<p class="text-sm text-stone-400">Belum ada data lantai.</p>`;
+  if (!floors.length) return `<p class="text-sm text-stone-600">Belum ada data lantai.</p>`;
   return floors
     .map(
       (floor) => `
@@ -240,7 +240,7 @@ export function render(root) {
                             <td class="font-black text-stone-800">${esc(bill.roomNumber || '—')}</td>
                             <td>
                               <p class="font-semibold text-stone-700">${esc(bill.tenantName || '—')}</p>
-                              <p class="text-[10px] text-stone-400">${esc(bill.type || '')}</p>
+                              <p class="text-[10px] text-stone-600">${esc(bill.type || '')}</p>
                             </td>
                             <td class="${overdue ? 'text-rose-700 font-bold' : ''} whitespace-nowrap">${formatDate(bill.dueDate)}</td>
                             <td class="font-black text-amber-700 whitespace-nowrap">${rupiah(bill.amount)}</td>

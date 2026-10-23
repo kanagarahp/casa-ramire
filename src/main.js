@@ -52,7 +52,7 @@ function scheduleRender() {
 function errorScreen(error) {
   return `
     <div class="card p-8 text-center animate-in">
-      <h2 class="font-black text-stone-800 text-lg">Terjadi kesalahan saat memuat halaman</h2>
+      <h1 class="font-black text-stone-800 text-lg">Terjadi kesalahan saat memuat halaman</h1>
       <p class="text-sm text-stone-500 mt-1 max-w-lg mx-auto">
         Coba muat ulang aplikasi. Jika masalah berlanjut, unduh backup data lalu lakukan pemulihan.
       </p>

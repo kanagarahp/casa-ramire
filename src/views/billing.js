@@ -57,11 +57,11 @@ function billRow(bill) {
       <td class="font-mono text-[11px] font-bold text-stone-700 whitespace-nowrap">${esc(bill.number || '—')}</td>
       <td>
         <p class="font-bold text-stone-800">${esc(bill.tenantName || '—')}</p>
-        <p class="text-[10px] text-stone-400">Kamar ${esc(bill.roomNumber || '—')}</p>
+        <p class="text-[10px] text-stone-600">Kamar ${esc(bill.roomNumber || '—')}</p>
       </td>
       <td>
         <p class="font-semibold text-stone-700">${esc(bill.type || 'Sewa')}</p>
-        ${bill.description ? `<p class="text-[10px] text-stone-400 max-w-[240px] truncate">${esc(bill.description)}</p>` : ''}
+        ${bill.description ? `<p class="text-[10px] text-stone-600 max-w-[240px] truncate">${esc(bill.description)}</p>` : ''}
       </td>
       <td class="font-black text-stone-800 whitespace-nowrap">${rupiah(bill.amount)}</td>
       <td class="whitespace-nowrap">
@@ -161,7 +161,7 @@ export function render(root) {
           ).join('')}
         </div>
         <div class="relative sm:ml-auto sm:w-72">
-          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">${icon('Search', 'w-3.5 h-3.5')}</span>
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-600">${icon('Search', 'w-3.5 h-3.5')}</span>
           <input id="bill-search" type="search" class="input input-sm pl-8" placeholder="Cari nomor / nama / kamar…" value="${esc(searchTerm)}" />
         </div>
       </div>

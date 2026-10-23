@@ -19,7 +19,7 @@ function section({ iconName, title, description, body }) {
           ${icon(iconName, 'w-5 h-5')}
         </span>
         <div class="min-w-0 flex-1">
-          <h3 class="font-extrabold text-stone-800 text-sm">${title}</h3>
+          <h2 class="font-extrabold text-stone-800 text-sm">${title}</h2>
           <p class="text-xs text-stone-500 mt-0.5">${description}</p>
           <div class="mt-4">${body}</div>
         </div>

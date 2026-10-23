@@ -48,7 +48,7 @@ function addonOptionsHtml() {
 
 function addonListHtml(addons) {
   if (!addons.length) {
-    return `<p class="text-[11px] text-stone-400 italic">Belum ada add-on dipilih.</p>`;
+    return `<p class="text-[11px] text-stone-600 italic">Belum ada add-on dipilih.</p>`;
   }
   return addons
     .map(
@@ -82,7 +82,7 @@ function summaryBody(quote, mode) {
       : '',
     `<div class="flex justify-between gap-3 text-emerald-700"><span class="font-bold">Dibayar sekarang</span><span class="font-extrabold">${rupiah(quote.payNow)}</span></div>`,
     `<div class="flex justify-between gap-3 ${quote.remaining > 0 ? 'text-rose-700' : 'text-stone-500'}"><span class="font-semibold">Sisa tagihan</span><span class="font-extrabold">${rupiah(quote.remaining)}</span></div>`,
-    `<div class="text-[10px] text-stone-400 pt-1">Periode: ${formatDate(quote.startDate)} — ${formatDate(quote.endDate)}</div>`,
+    `<div class="text-[10px] text-stone-600 pt-1">Periode: ${formatDate(quote.startDate)} — ${formatDate(quote.endDate)}</div>`,
   ];
   return rows.filter(Boolean).join('');
 }

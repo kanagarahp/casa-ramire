@@ -79,7 +79,7 @@ export function render(root) {
             </div>
 
             <div>
-              <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 mb-2">Sisipkan variabel</p>
+              <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-600 mb-2">Sisipkan variabel</p>
               <div class="flex flex-wrap gap-1.5">
                 ${TEMPLATE_VARIABLES.map(
                   (variable) => `
@@ -108,7 +108,7 @@ export function render(root) {
               <div class="max-w-[92%] self-start">
                 <div class="rounded-xl rounded-tl-sm bg-white px-3.5 py-3 shadow-sm">
                   <p id="preview-text" class="text-[12px] text-stone-800 whitespace-pre-line leading-relaxed">${esc(renderText(store[activeType]))}</p>
-                  <p class="text-[9px] text-stone-400 text-right mt-1.5">${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ✓✓</p>
+                  <p class="text-[9px] text-stone-600 text-right mt-1.5">${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} ✓✓</p>
                 </div>
                 <p class="text-[9px] text-stone-500 mt-1.5">Casa Ramire · otomatis dari template</p>
               </div>
@@ -121,7 +121,7 @@ export function render(root) {
                   .map(
                     ([key, value]) => `
                     <div class="flex justify-between gap-2">
-                      <span class="text-stone-400 font-mono">{${esc(key)}}</span>
+                      <span class="text-stone-600 font-mono">{${esc(key)}}</span>
                       <span class="font-semibold text-stone-700 truncate">${esc(value)}</span>
                     </div>`,
                   )

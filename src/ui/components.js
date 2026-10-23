@@ -86,13 +86,13 @@ export function statCard({ label, value, iconName = 'CircleDollarSign', tone = '
 }
 
 export function emptyRow(colspan, message = 'Belum ada data.') {
-  return `<tr><td colspan="${colspan}" class="px-4 py-10 text-center text-stone-400 text-sm">${esc(message)}</td></tr>`;
+  return `<tr><td colspan="${colspan}" class="px-4 py-10 text-center text-stone-600 text-sm">${esc(message)}</td></tr>`;
 }
 
 export function emptyState({ iconName = 'Inbox', title = 'Belum ada data', description = '', action = '' }) {
   return `
     <div class="flex flex-col items-center justify-center text-center px-6 py-14">
-      <div class="w-14 h-14 rounded-2xl bg-stone-100 text-stone-400 flex items-center justify-center mb-3">
+      <div class="w-14 h-14 rounded-2xl bg-stone-100 text-stone-600 flex items-center justify-center mb-3">
         ${icon(iconName, 'w-7 h-7')}
       </div>
       <h2 class="font-extrabold text-stone-700">${esc(title)}</h2>
@@ -154,11 +154,11 @@ export function progressBar(percent, className = 'bg-emerald-500') {
 }
 
 export function sectionLabel(text) {
-  return `<p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-400">${esc(text)}</p>`;
+  return `<p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-600">${esc(text)}</p>`;
 }
 
 export function contactLink(phone, label = '') {
-  if (!phone) return '<span class="text-stone-400">—</span>';
+  if (!phone) return '<span class="text-stone-600">—</span>';
   return `<a href="tel:${esc(phone)}" class="inline-flex items-center gap-1 text-stone-600 hover:text-brand">${icon('Phone', 'w-3.5 h-3.5')}<span>${esc(label || phone)}</span></a>`;
 }
 

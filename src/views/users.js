@@ -65,7 +65,7 @@ export function render(root) {
       <div class="card overflow-hidden">
         <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-line">
           <div>
-            <h3 class="font-extrabold text-stone-800 text-sm">Daftar Pengguna</h3>
+            <h2 class="font-extrabold text-stone-800 text-sm">Daftar Pengguna</h2>
             <p class="text-xs text-stone-500 mt-0.5">Owner dapat mengelola semua akun; staf hanya akses operasional.</p>
           </div>
           <span class="badge-gray">${activeUsers.length} aktif</span>
@@ -97,7 +97,7 @@ export function render(root) {
                                   ${esc(user.name)}
                                   ${isSelf ? '<span class="badge-gray">Anda</span>' : ''}
                                 </p>
-                                <p class="text-[10px] text-stone-400 font-mono">@${esc(user.username)}</p>
+                                <p class="text-[10px] text-stone-600 font-mono">@${esc(user.username)}</p>
                               </div>
                             </div>
                           </td>
@@ -123,7 +123,7 @@ export function render(root) {
                         </tr>`;
                       })
                       .join('')
-                  : `<tr><td colspan="5" class="px-4 py-10 text-center text-stone-400 text-sm">Belum ada akun.</td></tr>`
+                  : `<tr><td colspan="5" class="px-4 py-10 text-center text-stone-600 text-sm">Belum ada akun.</td></tr>`
               }
             </tbody>
           </table>
