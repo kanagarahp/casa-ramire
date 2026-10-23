@@ -117,6 +117,26 @@ kredensial GitHub (`gh auth refresh -s workflow`) lalu pulihkan workflow Pages
 sesuai dokumentasi GitHub. Saat ini deployment dilakukan lewat branch
 `gh-pages` agar tidak bergantung pada scope tersebut.
 
+## Deploy ke Vercel
+
+Repositori ini siap diimpor langsung ke Vercel. Konfigurasi di `vercel.json`
+sudah menetapkan:
+
+- Framework: **Vite**
+- Build command: `npm run build`
+- Output directory: `dist`
+- Cache immutable untuk aset ber-hash di `/assets/*`
+
+Langkah di dashboard Vercel:
+
+1. **Add New → Project**, lalu impor `kanagarahp/casa-ramire`.
+2. Biarkan pengaturan build mengikuti `vercel.json`, lalu klik **Deploy**.
+3. Setelah deploy pertama berhasil, buka **Settings → Domains** untuk
+   menambahkan domain sendiri dan mengikuti instruksi DNS dari Vercel.
+
+Tidak diperlukan rewrite SPA karena navigasi aplikasi memakai hash
+(`#/dashboard`), sehingga semua rute tetap dilayani oleh `index.html`.
+
 ## Lisensi
 
 Hak cipta © Casa Ramire. Digunakan untuk keperluan internal properti.
