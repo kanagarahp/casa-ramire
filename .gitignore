@@ -2,10 +2,8 @@ node_modules/
 dist/
 .vite/
 .vercel/
+.env*
 *.local
 .DS_Store
 Thumbs.db
 *.log
-
-.vercel
-.env*
