@@ -109,6 +109,8 @@ APP_URL=https://www.casaramire.com
 DOKU_PAYMENT_DUE_MINUTES=10080
 CATALOG_ADMIN_KEY=...          # juga dipakai untuk sinkronisasi state
 POSTGRES_URL / POSTGRES_URL_NON_POOLING
+# Opsional, isi hanya channel yang aktif di akun DOKU:
+# DOKU_PAYMENT_CHANNELS=QRIS,VIRTUAL_ACCOUNT_BCA,EMONEY_DANA
 ```
 
 Daftarkan notification URL di DOKU Back Office:
