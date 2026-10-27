@@ -2,6 +2,7 @@ import { formatDate, rupiah, todayISO, waLink } from '../core/format.js';
 import { getBill } from '../services/billing.js';
 import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { getCashflowTrend, getDashboardStats } from '../services/reports.js';
+import { getSettings } from '../services/settings.js';
 import { buildMessage } from '../services/templates.js';
 import {
   avatar,
@@ -18,6 +19,7 @@ import { icon } from '../ui/icons.js';
 import { openBookingModal, openCheckinFlow, openExtendModal } from './booking-modal.js';
 import { openVerifyModal } from './billing-modals.js';
 import { openTenantDetail } from './tenant-detail.js';
+import { openSettingsModal } from './settings.js';
 import { toast } from '../ui/toast.js';
 
 function daysLeftBadge(daysLeft) {
@@ -205,6 +207,7 @@ export function render(root) {
   const stats = getDashboardStats();
   const trend = getCashflowTrend(6);
   const today = todayISO();
+  const settings = getSettings();
 
   root.innerHTML = `
     <div data-view="dashboard" class="animate-in">
@@ -217,6 +220,19 @@ export function render(root) {
           <a href="#/billing" class="btn-outline btn-sm">${icon('ReceiptText', 'w-4 h-4')} Verifikasi Kas</a>
         `,
       })}
+
+      ${
+        !settings.catalogAdminKey
+          ? `<div class="card border-amber-200 bg-amber-50 p-4 mb-6 flex flex-wrap items-center gap-3">
+              <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">${icon('CreditCard', 'w-5 h-5')}</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-extrabold text-amber-900">Aktifkan pembayaran DOKU otomatis</p>
+                <p class="text-xs text-amber-800 mt-0.5">Masukkan kunci admin sekali di Pengaturan agar sinkronisasi dan tombol Link DOKU aktif.</p>
+              </div>
+              <button type="button" class="btn-gold btn-sm" data-action="open-settings">${icon('Settings', 'w-4 h-4')} Buka Pengaturan</button>
+            </div>`
+          : ''
+      }
 
       <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
         ${statCard({ label: 'Total Kamar', value: stats.total, iconName: 'Building2', hint: '2 lantai' })}
@@ -327,6 +343,7 @@ export function render(root) {
   const scope = root.querySelector('[data-view="dashboard"]');
   delegate(scope, 'click', '[data-action]', (event, target) => {
     const action = target.dataset.action;
+    if (action === 'open-settings') openSettingsModal();
     if (action === 'checkin') openCheckinFlow(Number(target.dataset.room));
     if (action === 'edit-booking') openBookingModal(Number(target.dataset.room), 'edit_booking');
     if (action === 'extend') openExtendModal(Number(target.dataset.tenant));

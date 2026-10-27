@@ -15,6 +15,11 @@ let pushTimer = null;
 let pollTimer = null;
 let lastKey = '';
 let unsubscribe = null;
+let authWarned = false;
+
+function handleFocus() {
+  if (document.visibilityState === 'visible') pull();
+}
 
 function adminKey() {
   return String(getSettings().catalogAdminKey || '').trim();
@@ -133,11 +138,21 @@ async function pull() {
       cache: 'no-store',
     });
 
-    if (!response.ok) return;
+    if (!response.ok) {
+      if (response.status === 401 && !authWarned) {
+        authWarned = true;
+        toast('Kunci admin tidak valid. Periksa Pengaturan.', 'error');
+      }
+      return;
+    }
+
+    authWarned = false;
     const payload = await response.json();
 
     if (!payload?.exists) {
-      if (!ready) await push({ initial: true });
+      ready = false;
+      version = 0;
+      await push({ initial: true });
       return;
     }
 
@@ -248,12 +263,8 @@ export function startSync() {
 
   unsubscribe = subscribe(schedulePush);
 
-  window.addEventListener('focus', () => {
-    if (document.visibilityState === 'visible') pull();
-  });
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') pull();
-  });
+  window.addEventListener('focus', handleFocus);
+  document.addEventListener('visibilitychange', handleFocus);
 
   pollTimer = setInterval(() => {
     if (document.visibilityState === 'visible') pull();
@@ -269,6 +280,8 @@ export function stopSync() {
   version = 0;
   clearTimeout(pushTimer);
   clearInterval(pollTimer);
+  window.removeEventListener('focus', handleFocus);
+  document.removeEventListener('visibilitychange', handleFocus);
   unsubscribe?.();
   unsubscribe = null;
 }

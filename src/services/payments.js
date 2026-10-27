@@ -63,6 +63,12 @@ export function createRenewalPaymentLink(renewal) {
   return postPaymentLink({ kind: 'renewal', renewal });
 }
 
+function formatExpiry(value) {
+  const raw = String(value || '');
+  if (!/^\d{14}$/.test(raw)) return raw;
+  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)} ${raw.slice(8, 10)}:${raw.slice(10, 12)}`;
+}
+
 function copyText(value) {
   if (navigator.clipboard?.writeText) {
     return navigator.clipboard.writeText(value);
@@ -125,7 +131,7 @@ export function openPaymentLinkModal({
             <input id="pay-link" type="text" class="input font-mono text-[11px]" readonly value="${esc(paymentUrl)}" />
             <button type="button" class="btn-outline btn-sm shrink-0" data-copy-link>${icon('Copy', 'w-4 h-4')} Salin</button>
           </div>
-          ${expiresAt ? `<p class="hint mt-1">Berlaku sampai: ${esc(expiresAt)}</p>` : ''}
+          ${expiresAt ? `<p class="hint mt-1">Berlaku sampai: ${esc(formatExpiry(expiresAt))}</p>` : ''}
         </div>
 
         <div class="rounded-xl border border-line bg-cream/60 px-3 py-2.5 text-[11px] text-stone-600 leading-relaxed">

@@ -21,7 +21,9 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 | **Add-On** | Layanan tambahan bulanan (parkir, kulkas, dispenser, dll.) |
 | **Penghuni** | Direktori, biodata, kontak darurat, riwayat kamar, riwayat pembayaran, tunggakan |
 | **Financial** | Jurnal pengeluaran + kategori, invoice layanan, pendapatan accrual, laba rugi |
-| **Sewa & Kas** | Daftar tagihan, filter status, verifikasi/batal verifikasi pembayaran, pengingat WhatsApp |
+| **Sewa & Kas** | Daftar tagihan, filter status, verifikasi/batal verifikasi pembayaran, pengingat WhatsApp, **link pembayaran DOKU** |
+| **Pembayaran DOKU** | Link QRIS/VA/e-wallet per tagihan, invoice, dan perpanjangan; status lunas otomatis lewat webhook; perpanjangan otomatis setelah dibayar |
+| **Sinkronisasi** | State operasional dibagikan lewat `/api/state` agar status pembayaran dari webhook langsung terlihat di dashboard |
 | **Konten WA** | Editor template tagihan, invoice, pengingat; preview WhatsApp; variabel otomatis |
 | **Akun** | Manajemen pengguna khusus owner, role owner/staf, reset password, aktif/nonaktif |
 | **Pengaturan** | Ganti password, backup/restore JSON, reset operasional, factory reset |
@@ -70,6 +72,62 @@ CATALOG_ADMIN_KEY                          # kunci untuk publikasi dari aplikasi
 oleh admin melalui Pengaturan dan disimpan hanya di perangkat admin tersebut.
 File `.env.catalog` (di-ignore Git) menyimpan kunci untuk referensi lokal.
 
+## Pembayaran DOKU otomatis
+
+Aplikasi bisa membuat **link pembayaran DOKU Checkout** untuk:
+
+- tagihan sewa / tagihan tambahan,
+- invoice layanan manual,
+- perpanjangan kontrak (dari form **Perpanjang**).
+
+Alur singkat:
+
+1. Admin membuat tagihan / invoice / perpanjangan seperti biasa.
+2. Klik **Link DOKU** (atau **Buat Link DOKU** di form perpanjangan).
+3. Kirim link ke penghuni lewat WhatsApp dari modal yang muncul.
+4. Penghuni membayar di halaman DOKU (QRIS / VA / e-wallet).
+5. DOKU mengirim webhook ke `/api/payments/doku/notification`.
+6. Webhook memverifikasi signature, menandai tagihan/invoice lunas, atau
+   memperpanjang kontrak secara otomatis.
+7. Aplikasi admin menyinkronkan state dari `/api/state` setiap 15 detik dan saat
+   tab kembali aktif. Dashboard langsung berubah:
+   - **Menunggak** hilang setelah tagihan lunas.
+   - **Akan Berakhir** hilang setelah perpanjangan dibayar.
+   - Riwayat pembayaran dan total kas penghuni ikut diperbarui.
+
+Verifikasi manual tetap tersedia untuk pembayaran tunai/transfer di luar DOKU.
+
+### Environment pembayaran
+
+Tambahkan di Vercel Production:
+
+```text
+DOKU_MODE=production
+DOKU_CLIENT_ID=BRN-...
+DOKU_SECRET_KEY=SK-...
+APP_URL=https://www.casaramire.com
+DOKU_PAYMENT_DUE_MINUTES=10080
+CATALOG_ADMIN_KEY=...          # juga dipakai untuk sinkronisasi state
+POSTGRES_URL / POSTGRES_URL_NON_POOLING
+```
+
+Daftarkan notification URL di DOKU Back Office:
+
+```text
+https://www.casaramire.com/api/payments/doku/notification
+```
+
+Catatan:
+
+- Channel DOKU harus aktif. Kalau belum, pembuatan link akan gagal dengan
+  pesan `PAYMENT CHANNEL IS INACTIVE`.
+- Sinkronisasi state baru aktif setelah **Kunci admin** diisi di
+  **Pengaturan → Landing page & katalog publik**.
+- Data operasional tetap disimpan lokal, lalu disinkronkan ke Postgres. Jika
+  ada konflik versi, aplikasi akan memuat state server terbaru dan menampilkan
+  peringatan.
+- Foto kamar tetap dipublikasikan terpisah lewat **Publikasikan katalog**.
+
 ### Notifikasi dashboard
 
 - **Akan Berakhir** menampilkan kontrak aktif yang masa sewanya tinggal 7 hari
@@ -109,11 +167,15 @@ npm run deploy   # terbitkan dist/ ke branch gh-pages
 
 ```
 api/
-├── catalog.js       # GET/PUT snapshot katalog publik (Vercel Function)
-└── catalog/photo.js # unggah/ambil foto katalog (Vercel Function)
+├── catalog.js                 # GET/PUT snapshot katalog publik (Vercel Function)
+├── catalog/photo.js           # unggah/ambil foto katalog (Vercel Function)
+├── state.js                   # sinkronisasi state operasional (Vercel Function)
+└── payments/doku/
+    ├── create.js              # buat link DOKU untuk tagihan/invoice/perpanjangan
+    └── notification.js        # webhook DOKU + auto-update status
 src/
 ├── core/            # konstanta, format, kriptografi, storage, store, router, seed
-├── services/        # logika bisnis (auth, properti, billing, pricing, laporan, katalog, ...)
+├── services/        # logika bisnis (auth, properti, billing, pricing, laporan, katalog, pembayaran, sinkronisasi, ...)
 ├── ui/              # komponen bersama, modal, toast, ikon, helper DOM
 ├── views/           # halaman dan modal per fitur (termasuk home.js untuk landing page)
 ├── styles.css       # Tailwind v4 + design token Casa Ramire
@@ -185,11 +247,15 @@ Konfigurasi `vercel.json` menetapkan:
 Tidak diperlukan rewrite SPA karena navigasi aplikasi memakai hash
 (`#/dashboard`), sehingga semua rute tetap dilayani oleh `index.html`.
 
-Folder `api/` otomatis diterbitkan sebagai Vercel Function. Endpoint katalog
-membutuhkan environment `POSTGRES_URL`/`POSTGRES_URL_NON_POOLING` dan
-`CATALOG_ADMIN_KEY` di project Vercel. Tanpa database, landing page tetap
-tampil memakai data lokal/seed, tetapi tombol **Publikasikan katalog** akan
-gagal dan foto tidak tersinkron ke pengunjung lain.
+Folder `api/` otomatis diterbitkan sebagai Vercel Function. Endpoint katalog,
+state, dan pembayaran membutuhkan environment
+`POSTGRES_URL`/`POSTGRES_URL_NON_POOLING` dan `CATALOG_ADMIN_KEY` di project
+Vercel. Endpoint DOKU juga membutuhkan `DOKU_MODE`, `DOKU_CLIENT_ID`,
+`DOKU_SECRET_KEY`, `APP_URL`, dan `DOKU_PAYMENT_DUE_MINUTES`.
+
+Tanpa database, landing page tetap tampil memakai data lokal/seed, tetapi
+tombol **Publikasikan katalog** dan **Link DOKU** akan gagal. Tanpa channel
+DOKU yang aktif, link pembayaran tidak bisa dibuat.
 
 ## Dokumentasi handoff
 
