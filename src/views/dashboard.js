@@ -1,6 +1,7 @@
 import { formatDate, rupiah, todayISO, waLink } from '../core/format.js';
 import { getBill } from '../services/billing.js';
 import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
+import { clearRenewalPending } from '../services/property.js';
 import { getCashflowTrend, getDashboardStats } from '../services/reports.js';
 import { getSettings } from '../services/settings.js';
 import { buildMessage } from '../services/templates.js';
@@ -16,6 +17,7 @@ import {
 } from '../ui/components.js';
 import { delegate, esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
+import { confirmAction } from '../ui/modal.js';
 import { openBookingModal, openCheckinFlow, openExtendModal } from './booking-modal.js';
 import { openVerifyModal } from './billing-modals.js';
 import { openTenantDetail } from './tenant-detail.js';
@@ -90,6 +92,31 @@ function expiringRows(entries) {
             </div>
           </div>`;
       })
+      .join('')}
+  </div>`;
+}
+
+function pendingRenewalRows(entries) {
+  if (!entries.length) return '';
+
+  return `<div class="divide-y divide-line-soft">
+    ${entries
+      .map(
+        ({ tenant, amount, expiresAt }) => `
+        <div class="px-5 py-3.5 flex flex-wrap items-center gap-3">
+          ${avatar(tenant.name, 'w-9 h-9 text-[10px]')}
+          <div class="min-w-0 flex-1">
+            <button type="button" class="text-sm font-bold text-stone-800 hover:text-brand hover:underline text-left" data-action="detail" data-tenant="${tenant.id}">${esc(tenant.name)}</button>
+            <p class="text-[11px] text-stone-500">Kamar ${esc(tenant.roomNumber || '—')} · menunggu pembayaran perpanjangan</p>
+            <p class="text-xs font-black text-amber-700 mt-0.5">${rupiah(amount)}</p>
+          </div>
+          <div class="flex items-center gap-2 ml-auto">
+            ${expiresAt ? `<span class="badge-amber normal-case tracking-normal">s/d ${formatDate(expiresAt)}</span>` : ''}
+            <button type="button" class="btn-outline btn-xs" data-action="pending-link" data-tenant="${tenant.id}">${icon('ExternalLink', 'w-3 h-3')} Buka link</button>
+            <button type="button" class="btn-ghost btn-xs text-rose-600" data-action="pending-cancel" data-tenant="${tenant.id}">Batalkan</button>
+          </div>
+        </div>`,
+      )
       .join('')}
   </div>`;
 }
@@ -268,6 +295,19 @@ export function render(root) {
         </div>
       </div>
 
+      ${
+        stats.pendingRenewals.length
+          ? `<div class="card overflow-hidden mb-6 border-amber-200">
+              ${cardHeader({
+                title: 'Menunggu Pembayaran Perpanjangan',
+                description: 'Link DOKU sudah dikirim, kontrak otomatis diperpanjang setelah dibayar',
+                actions: `<span class="badge-amber">${stats.pendingRenewals.length} penghuni</span>`,
+              })}
+              <div class="p-0">${pendingRenewalRows(stats.pendingRenewals)}</div>
+            </div>`
+          : ''
+      }
+
       <div class="card overflow-hidden mb-6 border-rose-200">
         ${cardHeader({
           title: 'Menunggak',
@@ -341,9 +381,39 @@ export function render(root) {
   `;
 
   const scope = root.querySelector('[data-view="dashboard"]');
-  delegate(scope, 'click', '[data-action]', (event, target) => {
+  delegate(scope, 'click', '[data-action]', async (event, target) => {
     const action = target.dataset.action;
     if (action === 'open-settings') openSettingsModal();
+    if (action === 'pending-link') {
+      const tenantId = Number(target.dataset.tenant);
+      const entry = stats.pendingRenewals.find(
+        (item) => String(item.tenant.id) === String(tenantId),
+      );
+      if (!entry) return;
+      openPaymentLinkModal({
+        title: 'Link Pembayaran Perpanjangan',
+        subtitle: `${entry.tenant.name} • Kamar ${entry.tenant.roomNumber}`,
+        paymentUrl: entry.paymentUrl,
+        invoiceNumber: entry.paymentId,
+        amount: entry.amount,
+        expiresAt: entry.expiresAt,
+        phone: entry.tenant.phone || '',
+        message: `Halo Kak ${entry.tenant.name}, berikut link pembayaran perpanjangan sewa Kamar ${entry.tenant.roomNumber} Casa Ramire sebesar ${rupiah(entry.amount)}.`,
+      });
+    }
+    if (action === 'pending-cancel') {
+      const tenantId = Number(target.dataset.tenant);
+      const approved = await confirmAction({
+        title: 'Batalkan link perpanjangan?',
+        message:
+          'Link pembayaran akan ditandai batal di dashboard. Penghuni akan kembali muncul di daftar Akan Berakhir sampai link baru dibuat.',
+        confirmText: 'Ya, batalkan',
+        danger: true,
+      });
+      if (!approved) return;
+      clearRenewalPending(tenantId);
+      toast('Link perpanjangan dibatalkan.', 'warning');
+    }
     if (action === 'checkin') openCheckinFlow(Number(target.dataset.room));
     if (action === 'edit-booking') openBookingModal(Number(target.dataset.room), 'edit_booking');
     if (action === 'extend') openExtendModal(Number(target.dataset.tenant));

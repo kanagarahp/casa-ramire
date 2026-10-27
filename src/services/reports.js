@@ -38,6 +38,7 @@ export function getDashboardStats() {
     profit: accrual.totalRecognized - monthExpenses,
     outstanding: outstandingBills + outstandingInvoices,
     expiring: getExpiringContracts(7),
+    pendingRenewals: getPendingRenewals(),
     overdue: getOverdueTenants(),
     checkins: getUpcomingCheckins(),
     unpaidBills: getOutstandingBills(),
@@ -71,11 +72,19 @@ export function getUpcomingCheckins() {
     .sort((a, b) => String(a.booking.startDate).localeCompare(String(b.booking.startDate)));
 }
 
+function hasActivePendingRenewal(tenant, today) {
+  const pending = tenant.pendingRenewal;
+  if (!pending) return false;
+  if (!pending.expiresAt) return true;
+  return pending.expiresAt >= today;
+}
+
 /** Active contracts that end within `days` (overdue contracts are included). */
 export function getExpiringContracts(days = 7) {
   const today = todayISO();
   return getState()
     .tenants.filter((tenant) => tenant.status === 'aktif' && tenant.endDate)
+    .filter((tenant) => !hasActivePendingRenewal(tenant, today))
     .map((tenant) => ({
       tenant,
       roomNumber: tenant.roomNumber,
@@ -83,6 +92,26 @@ export function getExpiringContracts(days = 7) {
     }))
     .filter((entry) => entry.daysLeft <= days)
     .sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
+/** Tenants waiting for a DOKU renewal payment link to be paid. */
+export function getPendingRenewals() {
+  const today = todayISO();
+  return getState()
+    .tenants.filter(
+      (tenant) =>
+        tenant.status === 'aktif' &&
+        tenant.pendingRenewal &&
+        hasActivePendingRenewal(tenant, today),
+    )
+    .map((tenant) => ({
+      tenant,
+      amount: toNumber(tenant.pendingRenewal.amount),
+      paymentUrl: tenant.pendingRenewal.paymentUrl || '',
+      paymentId: tenant.pendingRenewal.paymentId || '',
+      expiresAt: tenant.pendingRenewal.expiresAt || '',
+    }))
+    .sort((a, b) => String(a.expiresAt).localeCompare(String(b.expiresAt)));
 }
 
 export function getOutstandingBills() {

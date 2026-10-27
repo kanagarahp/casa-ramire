@@ -176,6 +176,7 @@ export function applyPaymentToState(state, payment, { channel = '', paidAt = new
     tenant.contractTotal = toNumber(tenant.contractTotal) + grandTotal;
     tenant.monthlyCharge = toNumber(renewal.monthlyCharge);
     tenant.totalPaid = toNumber(tenant.totalPaid) + grandTotal;
+    tenant.pendingRenewal = null;
     tenant.updatedAt = nowISO;
 
     const bill = {

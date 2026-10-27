@@ -5,7 +5,11 @@ import { addDays, todayISO } from '../src/core/format.js';
 import { buildSeedState } from '../src/core/seed.js';
 import { replaceState } from '../src/core/store.js';
 import { buildCatalogSnapshot } from '../src/services/catalog.js';
-import { getExpiringContracts, getOverdueTenants } from '../src/services/reports.js';
+import {
+  getExpiringContracts,
+  getOverdueTenants,
+  getPendingRenewals,
+} from '../src/services/reports.js';
 
 function tenant(overrides = {}) {
   return {
@@ -111,6 +115,39 @@ test('expiring contracts include only active tenants within seven days', () => {
   assert.equal(expiring.length, 1);
   assert.equal(expiring[0].tenant.name, 'Segera Berakhir');
   assert.equal(expiring[0].daysLeft, 3);
+});
+
+test('a tenant with a pending renewal leaves Akan Berakhir until the link expires', () => {
+  const seed = buildSeedState();
+  const tenantWithPending = tenant({
+    endDate: addDays(todayISO(), 2),
+    pendingRenewal: {
+      paymentId: 'CR-1',
+      amount: 2200000,
+      paymentUrl: 'https://checkout.doku.com/test',
+      createdAt: todayISO(),
+      expiresAt: addDays(todayISO(), 7),
+    },
+  });
+
+  replaceState({ ...seed, tenants: [tenantWithPending], bills: [] });
+
+  assert.equal(getExpiringContracts(7).length, 0);
+  assert.equal(getPendingRenewals().length, 1);
+
+  replaceState({
+    ...seed,
+    tenants: [
+      {
+        ...tenantWithPending,
+        pendingRenewal: { ...tenantWithPending.pendingRenewal, expiresAt: addDays(todayISO(), -1) },
+      },
+    ],
+    bills: [],
+  });
+
+  assert.equal(getExpiringContracts(7).length, 1);
+  assert.equal(getPendingRenewals().length, 0);
 });
 
 test('public catalog snapshot never exposes private admin or tenant data', () => {

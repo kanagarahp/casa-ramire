@@ -615,3 +615,39 @@ export function getOutstandingForTenant(tenantId) {
 export function getBookingRoomOfTenant(tenant) {
   return tenant?.roomId ? getRoom(tenant.roomId) : null;
 }
+
+/** Mark a tenant as waiting for a DOKU renewal payment. */
+export function markRenewalPending(tenantId, pending = {}) {
+  const tenant = getTenant(tenantId);
+  must(tenant, 'Penghuni tidak ditemukan.');
+
+  update((draft) => {
+    const target = draft.tenants.find((item) => String(item.id) === String(tenantId));
+    target.pendingRenewal = {
+      paymentId: pending.paymentId || '',
+      amount: Math.max(0, Math.round(toNumber(pending.amount))),
+      paymentUrl: String(pending.paymentUrl || ''),
+      createdAt: pending.createdAt || todayISO(),
+      expiresAt: pending.expiresAt || '',
+    };
+    target.updatedAt = new Date().toISOString();
+  });
+
+  return getTenant(tenantId);
+}
+
+/** Clear the pending renewal marker (manual cancel or after payment). */
+export function clearRenewalPending(tenantId) {
+  const tenant = getTenant(tenantId);
+  if (!tenant) return null;
+
+  update((draft) => {
+    const target = draft.tenants.find((item) => String(item.id) === String(tenantId));
+    if (target) {
+      target.pendingRenewal = null;
+      target.updatedAt = new Date().toISOString();
+    }
+  });
+
+  return getTenant(tenantId);
+}

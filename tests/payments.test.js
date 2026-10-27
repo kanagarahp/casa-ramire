@@ -101,6 +101,12 @@ test('DOKU invoice payment marks the manual invoice paid', () => {
 
 test('DOKU renewal payment extends the contract and creates a paid bill', () => {
   const state = makeState();
+  state.tenants[0].pendingRenewal = {
+    paymentId: 'CR-3',
+    amount: 2200000,
+    paymentUrl: 'https://checkout.doku.com/test',
+    expiresAt: addDays(todayISO(), 7),
+  };
   const startDate = addDays(state.tenants[0].endDate, 1);
   const endDate = addDays(startDate, 30);
 
@@ -135,6 +141,7 @@ test('DOKU renewal payment extends the contract and creates a paid bill', () => 
 
   assert.equal(result.applied, true);
   assert.equal(state.tenants[0].endDate, endDate);
+  assert.equal(state.tenants[0].pendingRenewal, null);
   assert.equal(state.tenants[0].totalPaid, 2200000);
   assert.equal(state.tenants[0].contractTotal, 4400000);
   const renewalBill = state.bills.find((bill) => bill.type === 'Perpanjangan');

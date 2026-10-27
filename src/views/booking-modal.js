@@ -16,6 +16,7 @@ import {
   getRoom,
   getRooms,
   getTenant,
+  markRenewalPending,
   moveTenant,
   saveBooking,
 } from '../services/property.js';
@@ -439,6 +440,14 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
             ...quote,
             tenantId: tenant.id,
             addons: payload.addons,
+          });
+
+          markRenewalPending(tenant.id, {
+            paymentId: result.invoiceNumber,
+            amount: result.amount,
+            paymentUrl: result.paymentUrl,
+            createdAt: todayISO(),
+            expiresAt: addDays(todayISO(), 7),
           });
 
           close();
