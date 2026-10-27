@@ -177,7 +177,7 @@ function priceRows(floor, catalog) {
   const data = catalog.pricing?.[floor.key] || {};
   const monthly = Number(data['1']) || 0;
 
-  const rows = MONTH_PERIODS.map((period) => {
+  const rows = MONTH_PERIODS.filter((period) => Number(data[period.key]) > 0).map((period) => {
     const value = Number(data[period.key]) || 0;
     const perMonth = period.months > 1 ? Math.round(value / period.months) : value;
     const saving = monthly && period.months > 1 ? Math.max(0, monthly * period.months - value) : 0;
@@ -210,8 +210,8 @@ function priceRows(floor, catalog) {
       <div class="mt-4">${rows || '<p class="text-sm text-stone-500">Hubungi admin untuk harga terbaru.</p>'}</div>
 
       <div class="mt-4 flex flex-wrap gap-1.5">
-        <span class="badge-gray">Harian ${rupiah(data.harian || 0)}</span>
-        <span class="badge-gray">Mingguan ${rupiah(data.mingguan || 0)}</span>
+        ${data.harian ? `<span class="badge-gray">Harian ${rupiah(data.harian)}</span>` : ''}
+        ${data.mingguan ? `<span class="badge-gray">Mingguan ${rupiah(data.mingguan)}</span>` : ''}
       </div>
 
       <p class="hint mt-4 pt-4 border-t border-line-soft">
