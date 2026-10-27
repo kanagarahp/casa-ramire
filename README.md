@@ -152,6 +152,16 @@ dan tidak melihat aksi pemeliharaan data.
 > Password disimpan sebagai hash SHA-256 bersalt di perangkat. Untuk penggunaan
 > produksi dengan banyak pengguna, gunakan backend autentikasi sungguhan.
 
+### Lupa password owner?
+
+Di halaman login ada tombol **Lupa password?**. Reset membutuhkan **kunci admin**
+(nilai `CATALOG_ADMIN_KEY`, juga dipakai untuk sinkronisasi/pembayaran). Kunci
+tersebut ada di file `.env.catalog` atau di environment Vercel.
+
+Reset hanya mengubah password pada browser/perangkat yang sedang dipakai,
+karena data akun disimpan di `localStorage` perangkat. Jika owner memakai
+beberapa perangkat, lakukan reset di perangkat yang ingin dipakai.
+
 ## Menjalankan aplikasi
 
 Prasyarat: Node.js 20+ dan npm.
