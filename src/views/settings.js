@@ -292,7 +292,15 @@ export function openSettingsModal() {
           if (!approved) return;
 
           const currentSession = getState().session;
-          replaceState({ ...parsed, session: parsed.session || currentSession });
+          const currentKey = getState().settings?.catalogAdminKey || '';
+          replaceState({
+            ...parsed,
+            session: parsed.session || currentSession,
+            settings: {
+              ...(parsed.settings || {}),
+              catalogAdminKey: currentKey,
+            },
+          });
           toast('Data berhasil dipulihkan dari backup.');
           close();
         } catch (error) {

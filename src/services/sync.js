@@ -291,6 +291,13 @@ export async function ensureSynced() {
     if (!ready) await push({ initial: true });
   }
 
+  // Flush the latest local bill/invoice edits before the server computes a
+  // payment amount from the shared state.
+  if (ready) {
+    if (pushing) await new Promise((resolve) => setTimeout(resolve, 300));
+    await push();
+  }
+
   return ready;
 }
 
