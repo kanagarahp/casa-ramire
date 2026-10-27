@@ -273,8 +273,9 @@ DOKU yang aktif, link pembayaran tidak bisa dibuat.
 
 Catatan lengkap pekerjaan 23 Oktober 2026 (deployment, domain, aksesibilitas)
 ada di [`docs/HANDOFF-2026-10-23.md`](docs/HANDOFF-2026-10-23.md).
-Pekerjaan landing page, katalog publik, dan notifikasi dashboard 27 Oktober 2026
-ada di [`docs/HANDOFF-2026-10-27.md`](docs/HANDOFF-2026-10-27.md).
+Pekerjaan landing page, katalog publik, notifikasi dashboard, pembayaran DOKU
+otomatis, sinkronisasi state, dan lupa password owner 27 Oktober 2026 ada di
+[`docs/HANDOFF-2026-10-27.md`](docs/HANDOFF-2026-10-27.md).
 
 ## Lisensi
 
