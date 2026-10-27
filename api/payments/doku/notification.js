@@ -142,9 +142,9 @@ export default async function handler(req, res) {
 
       await client.query(
         `update casa_state
-         set data = $2::jsonb, version = version + 1, updated_at = now()
+         set data = $1::jsonb, version = version + 1, updated_at = now()
          where id = 'public'`,
-        ['public', JSON.stringify(state)],
+        [JSON.stringify(state)],
       );
 
       await client.query(
