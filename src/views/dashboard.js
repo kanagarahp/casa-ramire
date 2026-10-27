@@ -89,6 +89,51 @@ function expiringRows(entries) {
   </div>`;
 }
 
+function overdueLabel(days) {
+  if (days <= 0) return 'Jatuh tempo hari ini';
+  return `Menunggak ${days} hari`;
+}
+
+function overdueRows(entries) {
+  if (!entries.length) {
+    return emptyState({
+      iconName: 'BadgeCheck',
+      title: 'Tidak ada tunggakan',
+      description: 'Semua penghuni aktif sudah membayar tagihannya. Notifikasi otomatis hilang setelah pembayaran diverifikasi.',
+    });
+  }
+
+  return `<div class="divide-y divide-line-soft">
+    ${entries
+      .map(({ tenant, daysOverdue, dueDate, amount, bills }) => {
+        const message = buildMessage('tagihan', {
+          nama: tenant.name,
+          kamar: tenant.roomNumber,
+          nominal: rupiah(amount),
+          jatuh_tempo: formatDate(dueDate),
+        });
+        return `
+          <div class="px-5 py-3.5 flex flex-wrap items-center gap-3">
+            ${avatar(tenant.name, 'w-9 h-9 text-[10px]')}
+            <div class="min-w-0 flex-1">
+              <button type="button" class="text-sm font-bold text-stone-800 hover:text-brand hover:underline text-left" data-action="detail" data-tenant="${tenant.id}">${esc(tenant.name)}</button>
+              <p class="text-[11px] text-stone-500">
+                Kamar ${esc(tenant.roomNumber || '—')} · jatuh tempo ${formatDate(dueDate)}
+                ${bills.length > 1 ? ` · ${bills.length} tagihan` : ''}
+              </p>
+              <p class="text-xs font-black text-rose-700 mt-0.5">${rupiah(amount)}</p>
+            </div>
+            <div class="flex items-center gap-2 ml-auto">
+              <span class="badge-red normal-case tracking-normal">${overdueLabel(daysOverdue)}</span>
+              <a href="${waLink(tenant.phone, message)}" target="_blank" rel="noopener" class="btn-ghost btn-xs text-emerald-700" title="Kirim tagihan WhatsApp">${icon('MessageCircle', 'w-4 h-4')}</a>
+              <button type="button" class="btn-primary btn-xs" data-action="verify-overdue" data-id="${bills[0].id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
+            </div>
+          </div>`;
+      })
+      .join('')}
+  </div>`;
+}
+
 function cashflowChart(trend) {
   const max = Math.max(1, ...trend.flatMap((item) => [item.income, item.expense]));
   const current = trend[trend.length - 1] || { income: 0, expense: 0, net: 0 };
@@ -195,12 +240,24 @@ export function render(root) {
 
         <div class="card overflow-hidden">
           ${cardHeader({
-            title: 'Kontrak Akan Berakhir',
-            description: 'H-7 dan kontrak yang sudah lewat',
-            actions: `<span class="badge-red">${stats.expiring.length} kontrak</span>`,
+            title: 'Akan Berakhir',
+            description: 'Masa sewa tinggal 7 hari lagi (termasuk yang sudah lewat)',
+            actions: `<span class="badge-amber">${stats.expiring.length} kontrak</span>`,
           })}
           <div class="p-0">${expiringRows(stats.expiring)}</div>
         </div>
+      </div>
+
+      <div class="card overflow-hidden mb-6 border-rose-200">
+        ${cardHeader({
+          title: 'Menunggak',
+          description: 'Penghuni aktif yang belum melunasi tagihan lewat jatuh tempo',
+          actions: `
+            <span class="badge-red">${stats.overdue.length} penghuni</span>
+            <a href="#/billing" class="btn-outline btn-xs">Lihat tagihan</a>
+          `,
+        })}
+        <div class="p-0">${overdueRows(stats.overdue)}</div>
       </div>
 
       <div class="grid lg:grid-cols-2 gap-6 mb-6">
@@ -271,6 +328,8 @@ export function render(root) {
     if (action === 'extend') openExtendModal(Number(target.dataset.tenant));
     if (action === 'detail') openTenantDetail(Number(target.dataset.tenant));
     if (action === 'tenant-booking') openBookingModal(Number(target.dataset.room), 'edit_booking');
-    if (action === 'verify') openVerifyModal({ kind: 'bill', id: Number(target.dataset.id) });
+    if (action === 'verify' || action === 'verify-overdue') {
+      openVerifyModal({ kind: 'bill', id: Number(target.dataset.id) });
+    }
   });
 }

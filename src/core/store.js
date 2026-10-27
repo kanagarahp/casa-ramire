@@ -33,6 +33,19 @@ function migrate(stored) {
     if (!Array.isArray(merged[key])) merged[key] = base[key];
   }
 
+  // v4: rooms can carry a catalog photo (local data URL and/or published URL).
+  merged.rooms = merged.rooms.map((room) => ({
+    photo: '',
+    photoUrl: '',
+    ...room,
+  }));
+
+  // Keep the public WhatsApp number filled for saves created before the
+  // landing page existed (empty string would otherwise override the default).
+  if (!merged.settings.whatsapp) {
+    merged.settings.whatsapp = base.settings.whatsapp;
+  }
+
   // v3: the seeded staff account moved from "rian" to "admin". Rename an
   // existing saved account (keeping its password/role) or add the new seed.
   if (storedVersion < 3) {

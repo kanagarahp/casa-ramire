@@ -5,6 +5,7 @@ import {
   deleteRoom,
   getRooms,
   getTenants,
+  updateRoomPhoto,
 } from '../services/property.js';
 import { isOwner } from '../services/auth.js';
 import { storage } from '../core/storage.js';
@@ -15,7 +16,7 @@ import {
   pageHeader,
   statusBadge,
 } from '../ui/components.js';
-import { delegate, esc } from '../ui/dom.js';
+import { delegate, esc, readImageAsDataUrl, setBusy } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
@@ -56,9 +57,14 @@ function roomRate(room) {
   return rupiah(rates['1'] || 0);
 }
 
+function photoAction(room) {
+  return `<button type="button" class="btn-ghost btn-xs ${room.photo || room.photoUrl ? 'text-brand' : 'text-stone-600'}" data-action="photo" data-id="${room.id}" title="Unggah / ganti foto kamar">${icon('Camera', 'w-3.5 h-3.5')} ${room.photo || room.photoUrl ? 'Foto' : 'Tambah foto'}</button>`;
+}
+
 function actionsFor(room) {
   if (room.status === 'kosong') {
     return `
+      ${photoAction(room)}
       <button type="button" class="btn-outline btn-xs" data-action="booking" data-id="${room.id}">${icon('CalendarClock', 'w-3 h-3')} Booking</button>
       <button type="button" class="btn-primary btn-xs" data-action="checkin" data-id="${room.id}">${icon('LogIn', 'w-3 h-3')} Check-in</button>
       ${
@@ -70,12 +76,14 @@ function actionsFor(room) {
   }
   if (room.status === 'booking') {
     return `
+      ${photoAction(room)}
       <button type="button" class="btn-primary btn-xs" data-action="checkin" data-id="${room.id}">${icon('LogIn', 'w-3 h-3')} Check-in</button>
       <button type="button" class="btn-outline btn-xs" data-action="edit-booking" data-id="${room.id}">${icon('Pencil', 'w-3 h-3')} Edit</button>
       <button type="button" class="btn-ghost btn-xs text-rose-600" data-action="cancel-booking" data-id="${room.id}" title="Batalkan booking">${icon('X', 'w-3.5 h-3.5')}</button>
     `;
   }
   return `
+    ${photoAction(room)}
     <button type="button" class="btn-outline btn-xs" data-action="detail" data-id="${room.id}">${icon('UserRound', 'w-3 h-3')} Detail</button>
     <button type="button" class="btn-outline btn-xs" data-action="extend" data-id="${room.id}">${icon('Repeat', 'w-3 h-3')} Perpanjang</button>
     <button type="button" class="btn-ghost btn-xs text-rose-600" data-action="checkout" data-id="${room.id}" title="Check-out">${icon('DoorOpen', 'w-3.5 h-3.5')}</button>
@@ -125,6 +133,14 @@ function gridHtml(rooms, tenantsById) {
               ${statusBadge(room.status)}
               <span class="text-[10px] font-bold uppercase tracking-wider text-stone-600">Lantai ${esc(room.lantai)}</span>
             </div>
+            ${
+              room.photo || room.photoUrl
+                ? `<img src="${esc(room.photo || room.photoUrl)}" alt="Foto kamar ${esc(room.nomor)}" loading="lazy" class="w-full h-32 object-cover rounded-xl border border-line-soft mb-3" />`
+                : `<div class="w-full h-24 rounded-xl border border-dashed border-line bg-gradient-to-br from-brand-50 via-cream to-gold-50 mb-3 flex flex-col items-center justify-center gap-1 text-stone-400">
+                    ${icon('Image', 'w-6 h-6')}
+                    <span class="text-[10px] font-bold uppercase tracking-wider">Belum ada foto</span>
+                  </div>`
+            }
             <div class="flex items-end justify-between gap-2">
               <div>
                 <h2 class="text-2xl font-black text-stone-800 leading-none">Kamar ${esc(room.nomor)}</h2>
@@ -165,7 +181,16 @@ function listHtml(rooms, tenantsById) {
                 const tenant = room.tenantId ? tenantsById.get(String(room.tenantId)) : null;
                 return `
                   <tr>
-                    <td class="font-black text-stone-800">Kamar ${esc(room.nomor)}</td>
+                    <td class="font-black text-stone-800">
+                      <div class="flex items-center gap-2">
+                        ${
+                          room.photo || room.photoUrl
+                            ? `<img src="${esc(room.photo || room.photoUrl)}" alt="Foto kamar ${esc(room.nomor)}" loading="lazy" class="w-10 h-10 rounded-lg object-cover border border-line-soft shrink-0" />`
+                            : `<span class="w-10 h-10 rounded-lg border border-dashed border-line bg-cream text-stone-400 flex items-center justify-center shrink-0">${icon('Image', 'w-4 h-4')}</span>`
+                        }
+                        <span>Kamar ${esc(room.nomor)}</span>
+                      </div>
+                    </td>
                     <td>Lantai ${esc(room.lantai)}</td>
                     <td>${statusBadge(room.status)}</td>
                     <td>${occupantHtml(room, tenant)}</td>
@@ -308,6 +333,7 @@ export function render(root) {
     }
     if (!room) return;
 
+    if (action === 'photo') openRoomPhotoModal(room.id);
     if (action === 'booking') openBookingModal(room.id, 'booking');
     if (action === 'checkin') {
       if (room.status === 'booking') openCheckinFlow(room.id);
@@ -383,6 +409,102 @@ function openAddRoomModal() {
             lantai: el.querySelector('#nr-floor').value,
           });
           toast('Kamar baru berhasil ditambahkan.');
+          close();
+        } catch (error) {
+          toast(error.message, 'error');
+        }
+      });
+    },
+  });
+}
+
+function openRoomPhotoModal(roomId) {
+  const room = getRooms().find((item) => String(item.id) === String(roomId));
+  if (!room) return;
+
+  const existing = room.photo || room.photoUrl || '';
+  let selectedPhoto = null;
+
+  openModal({
+    title: `Foto Kamar ${room.nomor}`,
+    subtitle: 'Foto ini tampil di landing page / katalog publik.',
+    size: 'md',
+    body: `
+      <div class="space-y-4">
+        <div class="rounded-2xl border border-line bg-cream/60 p-3">
+          <div id="rp-preview-wrap" class="aspect-[4/3] rounded-xl overflow-hidden bg-white border border-line flex items-center justify-center">
+            ${
+              existing
+                ? `<img id="rp-preview" src="${esc(existing)}" alt="Foto kamar ${esc(room.nomor)}" class="w-full h-full object-cover" />`
+                : `<div id="rp-preview" class="flex flex-col items-center justify-center gap-2 text-stone-400">
+                    ${icon('Image', 'w-10 h-10')}
+                    <span class="text-xs font-bold">Belum ada foto</span>
+                  </div>`
+            }
+          </div>
+        </div>
+
+        <div>
+          <label class="label" for="rp-file">Pilih foto kamar</label>
+          <input id="rp-file" type="file" accept="image/jpeg,image/png,image/webp" class="input file:mr-3 file:rounded-lg file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-gold" />
+          <p class="hint mt-1.5">JPG/PNG/WebP. Foto otomatis dikompres agar ringan dan cepat dibuka.</p>
+        </div>
+
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-800 leading-relaxed">
+          Setelah foto diunggah, buka <b>Pengaturan ? Landing page &amp; katalog</b> lalu klik <b>Publikasikan katalog</b> agar foto terlihat oleh pengunjung casaramire.com.
+        </div>
+      </div>
+    `,
+    footer: `
+      ${existing ? `<button type="button" class="btn-ghost btn-sm text-rose-600" data-remove-photo>${icon('Trash2', 'w-4 h-4')} Hapus foto</button>` : ''}
+      <button type="button" class="btn-outline btn-sm" data-modal-close>Batal</button>
+      <button type="button" class="btn-primary btn-sm" data-save-photo>${icon('Check', 'w-4 h-4')} Simpan foto</button>
+    `,
+    onMount(el, close) {
+      const fileInput = el.querySelector('#rp-file');
+      const previewWrap = el.querySelector('#rp-preview-wrap');
+      const saveButton = el.querySelector('[data-save-photo]');
+
+      const paintPreview = (src) => {
+        if (src) {
+          previewWrap.innerHTML = `<img src="${esc(src)}" alt="Pratinjau foto kamar ${esc(room.nomor)}" class="w-full h-full object-cover" />`;
+        } else {
+          previewWrap.innerHTML = `<div class="flex flex-col items-center justify-center gap-2 text-stone-400">
+            ${icon('Image', 'w-10 h-10')}
+            <span class="text-xs font-bold">Belum ada foto</span>
+          </div>`;
+        }
+      };
+
+      fileInput?.addEventListener('change', async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        setBusy(saveButton, true, 'Mengompres foto…');
+        try {
+          selectedPhoto = await readImageAsDataUrl(file);
+          paintPreview(selectedPhoto);
+          toast('Foto siap disimpan.');
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          setBusy(saveButton, false);
+        }
+      });
+
+      el.querySelector('[data-remove-photo]')?.addEventListener('click', () => {
+        selectedPhoto = '';
+        paintPreview('');
+        toast('Foto akan dihapus saat disimpan.', 'warning');
+      });
+
+      saveButton?.addEventListener('click', () => {
+        if (selectedPhoto === null) {
+          close();
+          return;
+        }
+        try {
+          updateRoomPhoto(room.id, selectedPhoto);
+          toast(selectedPhoto ? 'Foto kamar berhasil disimpan.' : 'Foto kamar dihapus.');
           close();
         } catch (error) {
           toast(error.message, 'error');

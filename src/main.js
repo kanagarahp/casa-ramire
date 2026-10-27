@@ -7,6 +7,7 @@ import { getActiveUser, isOwner } from './services/auth.js';
 import { closeAllModals } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 
+import * as homeView from './views/home.js';
 import * as dashboardView from './views/dashboard.js';
 import * as roomsView from './views/rooms.js';
 import * as pricingView from './views/pricing.js';
@@ -64,18 +65,42 @@ function errorScreen(error) {
 
 function render() {
   const user = getActiveUser();
+  let route = getRoute();
+
+  if (route === 'home') {
+    if (lastUserId !== null) closeAllModals();
+    lastUserId = null;
+    lastRoute = null;
+    app.innerHTML = '';
+    try {
+      homeView.render(app);
+    } catch (error) {
+      console.error('[app] failed to render landing page', error);
+      app.innerHTML = errorScreen(error);
+    }
+    return;
+  }
+
+  if (route === 'login' && user) {
+    navigate('dashboard', { replace: true });
+    route = 'dashboard';
+  }
 
   if (!user) {
     if (lastUserId !== null) closeAllModals();
     lastUserId = null;
     lastRoute = null;
+
+    if (route !== 'login') {
+      navigate('login', { replace: true });
+    }
+
     app.innerHTML = renderLogin();
     bindLogin(app);
     document.title = 'Masuk — Casa Ramire';
     return;
   }
 
-  let route = getRoute();
   if (OWNER_ONLY.has(route) && !isOwner()) {
     toast('Halaman tersebut hanya dapat diakses oleh owner.', 'warning');
     navigate('dashboard', { replace: true });
@@ -119,7 +144,7 @@ subscribe(scheduleRender);
 onRouteChange(scheduleRender);
 
 if (!window.location.hash) {
-  window.history.replaceState(null, '', '#/dashboard');
+  window.history.replaceState(null, '', getActiveUser() ? '#/dashboard' : '#/home');
 }
 
 render();

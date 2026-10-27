@@ -59,6 +59,66 @@ export function readFileAsText(file) {
   });
 }
 
+/**
+ * Read an image file and return a compressed JPEG data URL.
+ * Used for the room cover photos on the public catalog.
+ */
+export function readImageAsDataUrl(file, { maxDimension = 900, quality = 0.62 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type)) {
+      reject(new Error('Pilih foto berformat JPG, PNG, atau WebP.'));
+      return;
+    }
+
+    if (file.size > 12 * 1024 * 1024) {
+      reject(new Error('Ukuran file foto maksimal 12 MB.'));
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      try {
+        const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(image, 0, 0, width, height);
+
+        let nextQuality = quality;
+        let dataUrl = canvas.toDataURL('image/jpeg', nextQuality);
+
+        // Keep each image well below the API/localStorage limits.
+        while (dataUrl.length > 380_000 && nextQuality > 0.32) {
+          nextQuality -= 0.07;
+          dataUrl = canvas.toDataURL('image/jpeg', nextQuality);
+        }
+
+        URL.revokeObjectURL(objectUrl);
+        resolve(dataUrl);
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Gagal membaca file foto.'));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
 export function setBusy(button, busy, busyLabel = 'Memproses…') {
   if (!button) return;
   if (busy) {

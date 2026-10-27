@@ -54,8 +54,57 @@ export function addRoom({ nomor, lantai }) {
       status: 'kosong',
       tenantId: null,
       booking: null,
+      photo: '',
+      photoUrl: '',
     });
   });
+}
+
+function validatePhotoValue(value) {
+  const photo = String(value || '').trim();
+  if (!photo) return '';
+  const isDataImage = /^data:image\/(jpeg|png|webp);base64,/i.test(photo);
+  const isRemoteImage = /^https?:\/\//i.test(photo);
+  const isCatalogPhoto = photo.startsWith('/api/catalog/photo');
+  must(isDataImage || isRemoteImage || isCatalogPhoto, 'Format foto tidak didukung.');
+  return photo;
+}
+
+/** Attach/replace a room cover photo from the admin panel. */
+export function updateRoomPhoto(roomId, photo) {
+  const room = getRoom(roomId);
+  must(room, 'Kamar tidak ditemukan.');
+  const value = validatePhotoValue(photo);
+
+  // localStorage is typically limited to ~5 MB. Keep a safety margin so the
+  // operational data is never lost because one photo was too large.
+  const currentLength = JSON.stringify(getState()).length;
+  const previousLength = String(room.photo || '').length;
+  if (value && currentLength - previousLength + value.length > 4_600_000) {
+    throw new Error(
+      'Penyimpanan foto hampir penuh. Hapus foto kamar lain atau gunakan foto yang lebih kecil.',
+    );
+  }
+
+  update((draft) => {
+    const target = draft.rooms.find((item) => String(item.id) === String(roomId));
+    target.photo = value;
+    if (!value) target.photoUrl = '';
+    target.photoUpdatedAt = new Date().toISOString();
+  });
+
+  return getRoom(roomId);
+}
+
+/** Store the public URL returned by the catalog upload API. */
+export function updateRoomPhotoUrl(roomId, url) {
+  const room = getRoom(roomId);
+  must(room, 'Kamar tidak ditemukan.');
+  update((draft) => {
+    const target = draft.rooms.find((item) => String(item.id) === String(roomId));
+    target.photoUrl = String(url || '').trim();
+  });
+  return getRoom(roomId);
 }
 
 export function deleteRoom(id) {

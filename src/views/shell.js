@@ -50,6 +50,9 @@ export function renderShell(user, route) {
               <p class="text-[9px] font-extrabold uppercase tracking-wider text-gold">${roleLabel}</p>
             </div>
           </div>
+          <a href="#/home" data-close-drawer class="flex items-center justify-center gap-1.5 rounded-xl border border-gold/20 bg-gold/10 px-3 py-2 text-[11px] font-bold text-gold hover:bg-gold/20 transition">
+            ${icon('Globe2', 'w-3.5 h-3.5')} Lihat Landing Page
+          </a>
           <div class="grid grid-cols-2 gap-2">
             <button type="button" class="flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-bold text-stone-200 hover:bg-white/10 transition" data-action="settings">
               ${icon('Settings', 'w-3.5 h-3.5')} Pengaturan
@@ -112,7 +115,7 @@ export function bindShell(root) {
   root.querySelector('[data-action="close-menu"]')?.addEventListener('click', () => setDrawer(false));
   overlay?.addEventListener('click', () => setDrawer(false));
 
-  root.querySelectorAll('[data-nav]').forEach((link) => {
+  root.querySelectorAll('[data-nav], [data-close-drawer]').forEach((link) => {
     link.addEventListener('click', () => setDrawer(false));
   });
 

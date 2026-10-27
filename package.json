@@ -12,7 +12,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "lucide": "^0.564.0"
+    "lucide": "^0.564.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

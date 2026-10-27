@@ -92,6 +92,10 @@ export function renderLogin() {
                 <span>Masuk ke sistem</span>
               </button>
             </form>
+
+            <a href="#/home" class="mt-5 inline-flex items-center gap-1.5 text-xs font-bold text-stone-500 hover:text-brand">
+              ${icon('ArrowLeft', 'w-3.5 h-3.5')} Kembali ke katalog kamar
+            </a>
           </div>
         </div>
       </div>

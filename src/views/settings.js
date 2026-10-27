@@ -6,8 +6,10 @@ import {
   resetOperationalData,
 } from '../core/store.js';
 import { changeOwnPassword, getActiveUser, isOwner } from '../services/auth.js';
+import { publishCatalog } from '../services/catalog.js';
+import { updateSettings } from '../services/settings.js';
 import { confirmAction, openModal } from '../ui/modal.js';
-import { downloadFile, readFileAsText } from '../ui/dom.js';
+import { downloadFile, esc, readFileAsText, setBusy } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { toast } from '../ui/toast.js';
 
@@ -32,6 +34,7 @@ export function openSettingsModal() {
   const user = getActiveUser();
   if (!user) return;
   const state = getState();
+  const settings = state.settings || {};
   const owner = isOwner();
 
   openModal({
@@ -85,6 +88,63 @@ export function openSettingsModal() {
           `,
         })}
 
+        ${section({
+          iconName: 'Globe2',
+          title: 'Landing page & katalog publik',
+          description: 'Atur informasi yang tampil di casaramire.com dan publikasikan katalog kamar.',
+          body: `
+            <form id="settings-catalog-form" class="space-y-3">
+              <div class="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="label" for="set-wa">Nomor WhatsApp admin</label>
+                  <input id="set-wa" type="tel" class="input" value="${esc(settings.whatsapp || '')}" placeholder="cth: 08123456789" />
+                  <p class="hint mt-1">Dipakai untuk tombol "Chat Admin" di landing page.</p>
+                </div>
+                <div>
+                  <label class="label" for="set-address">Alamat / lokasi</label>
+                  <input id="set-address" type="text" class="input" value="${esc(settings.address || '')}" placeholder="cth: Jl. Melati No. 10" />
+                </div>
+              </div>
+
+              <div>
+                <label class="label" for="set-tagline">Tagline singkat</label>
+                <input id="set-tagline" type="text" class="input" value="${esc(settings.tagline || '')}" placeholder="cth: Kos nyaman, tenang, dan strategis." />
+              </div>
+
+              <div>
+                <label class="label" for="set-description">Deskripsi properti</label>
+                <textarea id="set-description" rows="3" class="input" placeholder="Ceritakan suasana dan keunggulan Casa Ramire…">${esc(settings.description || '')}</textarea>
+              </div>
+
+              <div>
+                <label class="label" for="set-facilities">Fasilitas</label>
+                <textarea id="set-facilities" rows="2" class="input" placeholder="AC, WiFi, kasur, lemari…">${esc(settings.facilities || '')}</textarea>
+                <p class="hint mt-1">Pisahkan dengan koma atau baris baru.</p>
+              </div>
+
+              <div>
+                <label class="label" for="set-maps">Link Google Maps (opsional)</label>
+                <input id="set-maps" type="url" class="input" value="${esc(settings.mapsUrl || '')}" placeholder="https://maps.google.com/…" />
+              </div>
+
+              <div class="rounded-xl border border-line bg-cream/60 p-3">
+                <label class="label" for="set-catalog-key">Kunci publikasi katalog</label>
+                <input id="set-catalog-key" type="password" class="input" value="${esc(settings.catalogAdminKey || '')}" placeholder="Masukkan kunci dari owner" autocomplete="off" />
+                <p class="hint mt-1">Kunci ini hanya disimpan di perangkat ini dan dipakai untuk mengunggah foto serta mempublikasikan katalog. Jangan bagikan.</p>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="submit" class="btn-primary btn-sm">${icon('Save', 'w-4 h-4')} Simpan profil</button>
+                <button type="button" class="btn-gold btn-sm" data-action="publish-catalog">${icon('UploadCloud', 'w-4 h-4')} Publikasikan katalog</button>
+                <a href="#/home" class="btn-outline btn-sm" data-modal-close>${icon('ExternalLink', 'w-4 h-4')} Buka landing page</a>
+              </div>
+              <p class="hint" data-published-at>
+                Terakhir dipublikasikan: ${settings.catalogPublishedAt ? formatDateTime(settings.catalogPublishedAt) : 'belum pernah'}.
+              </p>
+            </form>
+          `,
+        })}
+
         ${
           owner
             ? section({
@@ -130,6 +190,69 @@ export function openSettingsModal() {
           toast('Password berhasil diperbarui.');
         } catch (error) {
           toast(error.message, 'error');
+        }
+      });
+
+      const catalogForm = el.querySelector('#settings-catalog-form');
+
+      const readCatalogForm = () => ({
+        whatsapp: el.querySelector('#set-wa').value,
+        address: el.querySelector('#set-address').value,
+        tagline: el.querySelector('#set-tagline').value,
+        description: el.querySelector('#set-description').value,
+        facilities: el.querySelector('#set-facilities').value,
+        mapsUrl: el.querySelector('#set-maps').value,
+        catalogAdminKey: el.querySelector('#set-catalog-key').value,
+      });
+
+      const saveCatalogProfile = () => {
+        const values = readCatalogForm();
+        updateSettings(values);
+        return values;
+      };
+
+      catalogForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        saveCatalogProfile();
+        toast('Profil landing page berhasil disimpan.');
+      });
+
+      el.querySelector('[data-action="publish-catalog"]')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        const values = saveCatalogProfile();
+
+        if (!values.whatsapp) {
+          toast('Isi nomor WhatsApp admin agar tombol chat di landing page berfungsi.', 'warning');
+          el.querySelector('#set-wa').focus();
+          return;
+        }
+
+        if (!values.catalogAdminKey) {
+          toast('Isi kunci publikasi katalog terlebih dahulu.', 'error');
+          el.querySelector('#set-catalog-key').focus();
+          return;
+        }
+
+        setBusy(button, true, 'Mempublikasikan katalog…');
+        try {
+          const result = await publishCatalog({
+            adminKey: values.catalogAdminKey,
+            onProgress: ({ label }) => {
+              if (label) button.textContent = label;
+            },
+          });
+
+          const status = el.querySelector('[data-published-at]');
+          if (status) {
+            status.textContent = `Terakhir dipublikasikan: ${formatDateTime(result.updatedAt)}.`;
+          }
+          toast(
+            `Katalog berhasil dipublikasikan${result.uploadedPhotos ? ` (${result.uploadedPhotos} foto diunggah)` : ''}.`,
+          );
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          setBusy(button, false);
         }
       });
 

@@ -12,8 +12,9 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 
 | Modul | Kemampuan |
 | --- | --- |
-| **Dashboard** | KPI okupansi, antrean check-in, kontrak akan berakhir, arus kas 6 bulan, okupansi per lantai, tagihan aktif |
-| **Status Kamar** | 42 kamar (201–221, 301–321), filter lantai/status, pencarian, tampilan grid/daftar, tambah/hapus kamar |
+| **Landing Page** | Katalog kamar publik di `casaramire.com`, foto kamar, harga per lantai, fasilitas, dan tombol WhatsApp admin |
+| **Dashboard** | KPI okupansi, antrean check-in, **Akan Berakhir** (≤ 7 hari), **Menunggak** (tagihan lewat jatuh tempo + lama tunggakan), arus kas 6 bulan, okupansi per lantai, tagihan aktif |
+| **Status Kamar** | 42 kamar (201–221, 301–321), filter lantai/status, pencarian, tampilan grid/daftar, tambah/hapus kamar, unggah foto kamar |
 | **Booking & Check-in** | Booking kamar, check-in langsung, edit booking, pembayaran DP/lunas, deposit terpisah dari pendapatan |
 | **Kontrak** | Perpanjangan kontrak, pindah kamar dengan riwayat hunian, check-out, tambah tagihan, invoice layanan |
 | **Pricelist & Promo** | Tarif harian/mingguan/1/3/6/12 bulan per lantai, promo rupiah atau persen |
@@ -33,6 +34,51 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 - Diskon rupiah dihitung per bulan kontrak; diskon persen dihitung dari total sewa.
 - Add-on dihitung per bulan dan masuk ke biaya bulanan penghuni.
 - Tagihan yang sudah diverifikasi dapat dibatalkan; saldo penghuni ikut disesuaikan.
+
+## Landing page & katalog publik
+
+Halaman publik ada di `#/home` dan otomatis menjadi halaman pertama saat
+pengunjung membuka `casaramire.com` tanpa sesi login. Halaman ini menampilkan:
+
+- katalog kamar beserta status ketersediaan,
+- harga per lantai untuk paket 1/3/6/12 bulan,
+- fasilitas dan deposit,
+- tombol **Chat Admin** ke WhatsApp.
+
+Alur publikasi dari akun admin:
+
+1. Buka **Status Kamar → Foto** pada kamar yang ingin dilengkapi fotonya.
+2. Buka **Pengaturan → Landing page & katalog publik**.
+3. Isi nomor WhatsApp admin, alamat, deskripsi, dan fasilitas.
+4. Masukkan **Kunci publikasi katalog**.
+5. Klik **Publikasikan katalog**.
+
+Data operasional tetap disimpan di `localStorage` perangkat. Saat publikasi,
+aplikasi mengirim *snapshot* katalog yang aman (tanpa data penghuni/tagihan) ke
+`/api/catalog`. Foto diunggah ke `/api/catalog/photo`. Kedua endpoint adalah
+Vercel Function yang menyimpan data di Postgres, sehingga pengunjung di
+perangkat lain bisa melihat katalog yang sama.
+
+Environment yang dibutuhkan di Vercel:
+
+```text
+POSTGRES_URL / POSTGRES_URL_NON_POOLING   # sudah tersedia dari integrasi database
+CATALOG_ADMIN_KEY                          # kunci untuk publikasi dari aplikasi
+```
+
+`CATALOG_ADMIN_KEY` **tidak** ditanam di bundle frontend. Kunci dimasukkan sekali
+oleh admin melalui Pengaturan dan disimpan hanya di perangkat admin tersebut.
+File `.env.catalog` (di-ignore Git) menyimpan kunci untuk referensi lokal.
+
+### Notifikasi dashboard
+
+- **Akan Berakhir** menampilkan kontrak aktif yang masa sewanya tinggal 7 hari
+  atau sudah lewat.
+- **Menunggak** menampilkan penghuni aktif yang memiliki tagihan belum dibayar
+  dengan jatuh tempo hari ini atau sebelumnya, beserta lama tunggakan
+  (contoh: *Menunggak 2 hari*).
+- Notifikasi Menunggak dihitung dari status tagihan. Setelah pembayaran
+  diverifikasi (atau tagihan ditandai lunas), entri otomatis hilang.
 
 ## Akun awal
 
@@ -62,14 +108,17 @@ npm run deploy   # terbitkan dist/ ke branch gh-pages
 ## Struktur proyek
 
 ```
+api/
+├── catalog.js       # GET/PUT snapshot katalog publik (Vercel Function)
+└── catalog/photo.js # unggah/ambil foto katalog (Vercel Function)
 src/
 ├── core/            # konstanta, format, kriptografi, storage, store, router, seed
-├── services/        # logika bisnis (auth, properti, billing, pricing, laporan, ...)
+├── services/        # logika bisnis (auth, properti, billing, pricing, laporan, katalog, ...)
 ├── ui/              # komponen bersama, modal, toast, ikon, helper DOM
-├── views/           # halaman dan modal per fitur
+├── views/           # halaman dan modal per fitur (termasuk home.js untuk landing page)
 ├── styles.css       # Tailwind v4 + design token Casa Ramire
 └── main.js          # bootstrap, routing, re-render
-tests/               # unit test format, kriptografi, dan perhitungan harga
+tests/               # unit test format, kriptografi, harga, dan notifikasi tunggakan
 ```
 
 Prinsip utama:
@@ -136,12 +185,18 @@ Konfigurasi `vercel.json` menetapkan:
 Tidak diperlukan rewrite SPA karena navigasi aplikasi memakai hash
 (`#/dashboard`), sehingga semua rute tetap dilayani oleh `index.html`.
 
+Folder `api/` otomatis diterbitkan sebagai Vercel Function. Endpoint katalog
+membutuhkan environment `POSTGRES_URL`/`POSTGRES_URL_NON_POOLING` dan
+`CATALOG_ADMIN_KEY` di project Vercel. Tanpa database, landing page tetap
+tampil memakai data lokal/seed, tetapi tombol **Publikasikan katalog** akan
+gagal dan foto tidak tersinkron ke pengunjung lain.
+
 ## Dokumentasi handoff
 
-Catatan lengkap pekerjaan 23 Oktober 2026, status deployment, domain, dan
-langkah lanjutan ada di:
-
-[`docs/HANDOFF-2026-10-23.md`](docs/HANDOFF-2026-10-23.md)
+Catatan lengkap pekerjaan 23 Oktober 2026 (deployment, domain, aksesibilitas)
+ada di [`docs/HANDOFF-2026-10-23.md`](docs/HANDOFF-2026-10-23.md).
+Pekerjaan landing page, katalog publik, dan notifikasi dashboard 27 Oktober 2026
+ada di [`docs/HANDOFF-2026-10-27.md`](docs/HANDOFF-2026-10-27.md).
 
 ## Lisensi
 

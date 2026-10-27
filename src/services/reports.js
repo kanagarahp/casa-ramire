@@ -38,6 +38,7 @@ export function getDashboardStats() {
     profit: accrual.totalRecognized - monthExpenses,
     outstanding: outstandingBills + outstandingInvoices,
     expiring: getExpiringContracts(7),
+    overdue: getOverdueTenants(),
     checkins: getUpcomingCheckins(),
     unpaidBills: getOutstandingBills(),
     floors: getFloorStats(),
@@ -88,6 +89,57 @@ export function getOutstandingBills() {
   return getState()
     .bills.filter((bill) => bill.status === 'unpaid')
     .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+}
+
+/**
+ * Active tenants with at least one unpaid bill whose due date has arrived.
+ *
+ * The dashboard notification is derived from the bill status, so it disappears
+ * automatically once every overdue bill for that tenant is verified as paid.
+ */
+export function getOverdueTenants() {
+  const state = getState();
+  const today = todayISO();
+  const groups = new Map();
+
+  for (const bill of state.bills) {
+    if (bill.status === 'paid' || !bill.dueDate || bill.dueDate > today) continue;
+
+    const tenant = bill.tenantId
+      ? state.tenants.find((item) => String(item.id) === String(bill.tenantId))
+      : null;
+
+    if (!tenant || tenant.status !== 'aktif') continue;
+
+    const key = String(tenant.id);
+    const days = Math.max(0, daysBetween(bill.dueDate, today));
+    const outstanding = Math.max(0, toNumber(bill.amount) - toNumber(bill.paid));
+
+    if (outstanding <= 0) continue;
+
+    const entry = groups.get(key) || {
+      tenant,
+      name: tenant.name,
+      phone: tenant.phone || '',
+      roomNumber: tenant.roomNumber || '—',
+      daysOverdue: 0,
+      dueDate: bill.dueDate,
+      amount: 0,
+      bills: [],
+    };
+
+    entry.amount += outstanding;
+    entry.daysOverdue = Math.max(entry.daysOverdue, days);
+    if (bill.dueDate < entry.dueDate) entry.dueDate = bill.dueDate;
+    entry.bills.push(bill);
+    groups.set(key, entry);
+  }
+
+  return [...groups.values()].sort(
+    (a, b) =>
+      b.daysOverdue - a.daysOverdue ||
+      a.name.localeCompare(b.name, 'id'),
+  );
 }
 
 /**

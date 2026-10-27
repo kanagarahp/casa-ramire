@@ -6,7 +6,7 @@
 export const APP_NAME = 'Casa Ramire';
 export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const SESSION_KEY = 'casa-ramire:session';
 
 export const ROLES = {
@@ -117,6 +117,22 @@ export const TEMPLATE_VARIABLES = [
 ];
 
 export const DEFAULT_DEPOSIT = 500000;
+
+export const PUBLIC_ROUTES = new Set(['home', 'login']);
+
+export const DEFAULT_SETTINGS = {
+  propertyName: 'Casa Ramire',
+  tagline: 'Kos nyaman, tenang, dan strategis.',
+  description:
+    'Kamar deluxe dengan fasilitas lengkap di lingkungan yang tenang. Cocok untuk mahasiswa dan pekerja yang ingin tinggal jangka panjang.',
+  address: 'Kos Casa Ramire',
+  whatsapp: '081116623661',
+  mapsUrl: '',
+  facilities: 'AC, WiFi, kasur, lemari, meja kerja, kamar mandi dalam',
+  depositDefault: DEFAULT_DEPOSIT,
+  catalogAdminKey: '',
+  catalogPublishedAt: '',
+};
 
 export const NAV_ITEMS = [
   { path: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },

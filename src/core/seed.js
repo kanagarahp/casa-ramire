@@ -3,6 +3,7 @@ import {
   DEFAULT_EXPENSE_CATEGORIES,
   DEFAULT_PRICING,
   DEFAULT_PROMOS,
+  DEFAULT_SETTINGS,
   DEFAULT_TEMPLATES,
   DEFAULT_USERS,
   SCHEMA_VERSION,
@@ -22,6 +23,8 @@ export function generateRooms() {
         status: 'kosong',
         tenantId: null,
         booking: null,
+        photo: '',
+        photoUrl: '',
       });
       id += 1;
     }
@@ -58,10 +61,6 @@ export function buildSeedState() {
     promos: withIds(DEFAULT_PROMOS),
     pricing: structuredClone(DEFAULT_PRICING),
     templates: { ...DEFAULT_TEMPLATES },
-    settings: {
-      propertyName: 'Casa Ramire',
-      depositDefault: 500000,
-      address: 'Kos Casa Ramire',
-    },
+    settings: { ...DEFAULT_SETTINGS },
   };
 }
