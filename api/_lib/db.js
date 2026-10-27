@@ -5,18 +5,33 @@ const { Pool } = pg;
 let pool = null;
 let schemaPromise = null;
 
+function cleanConnectionString(value) {
+  try {
+    const url = new URL(value);
+    // Vercel/Postgres URLs sometimes carry sslmode=require. pg treats that as
+    // verify-full and rejects Supabase's certificate chain in serverless
+    // runtimes. The TLS setting below is applied explicitly instead.
+    url.searchParams.delete('sslmode');
+    url.searchParams.delete('ssl');
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
 function getPool() {
   if (pool) return pool;
 
-  const connectionString =
+  const rawConnectionString =
     process.env.POSTGRES_URL_NON_POOLING ||
     process.env.POSTGRES_URL ||
     process.env.DATABASE_URL;
 
-  if (!connectionString) {
+  if (!rawConnectionString) {
     throw new Error('Database katalog belum dikonfigurasi di environment Vercel.');
   }
 
+  const connectionString = cleanConnectionString(rawConnectionString);
   const isLocal = /(^|@)(localhost|127\.0\.0\.1)(:|\/)/.test(connectionString);
 
   pool = new Pool({
