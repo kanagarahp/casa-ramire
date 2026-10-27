@@ -404,15 +404,15 @@ export function render(root) {
     if (action === 'pending-cancel') {
       const tenantId = Number(target.dataset.tenant);
       const approved = await confirmAction({
-        title: 'Batalkan link perpanjangan?',
+        title: 'Tandai batal link perpanjangan?',
         message:
-          'Link pembayaran akan ditandai batal di dashboard. Penghuni akan kembali muncul di daftar Akan Berakhir sampai link baru dibuat.',
-        confirmText: 'Ya, batalkan',
+          'Link akan disembunyikan dari dashboard dan penghuni kembali muncul di Akan Berakhir. Link DOKU yang sudah dibuat tetap bisa dibayar sampai kedaluwarsa; jika dibayar, kontrak tetap otomatis diperpanjang.',
+        confirmText: 'Ya, tandai batal',
         danger: true,
       });
       if (!approved) return;
       clearRenewalPending(tenantId);
-      toast('Link perpanjangan dibatalkan.', 'warning');
+      toast('Link perpanjangan ditandai batal di dashboard.', 'warning');
     }
     if (action === 'checkin') openCheckinFlow(Number(target.dataset.room));
     if (action === 'edit-booking') openBookingModal(Number(target.dataset.room), 'edit_booking');
