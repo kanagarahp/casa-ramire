@@ -5,7 +5,7 @@ import { addDays, todayISO } from '../src/core/format.js';
 import { buildSeedState } from '../src/core/seed.js';
 import { replaceState } from '../src/core/store.js';
 import { buildCatalogSnapshot } from '../src/services/catalog.js';
-import { getOverdueTenants } from '../src/services/reports.js';
+import { getExpiringContracts, getOverdueTenants } from '../src/services/reports.js';
 
 function tenant(overrides = {}) {
   return {
@@ -93,6 +93,24 @@ test('overdue ignores inactive tenants and bills that are not due yet', () => {
   });
 
   assert.equal(getOverdueTenants().length, 0);
+});
+
+test('expiring contracts include only active tenants within seven days', () => {
+  const seed = buildSeedState();
+  replaceState({
+    ...seed,
+    tenants: [
+      tenant({ id: 1, name: 'Segera Berakhir', endDate: addDays(todayISO(), 3) }),
+      tenant({ id: 2, name: 'Masih Lama', endDate: addDays(todayISO(), 10) }),
+      tenant({ id: 3, name: 'Sudah Checkout', status: 'checkout', endDate: addDays(todayISO(), 2) }),
+    ],
+    bills: [],
+  });
+
+  const expiring = getExpiringContracts(7);
+  assert.equal(expiring.length, 1);
+  assert.equal(expiring[0].tenant.name, 'Segera Berakhir');
+  assert.equal(expiring[0].daysLeft, 3);
 });
 
 test('public catalog snapshot never exposes private admin or tenant data', () => {
