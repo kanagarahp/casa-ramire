@@ -131,5 +131,16 @@ export default async function handler(req, res) {
     }
   }
 
-  return methodNotAllowed(res, ['GET', 'PUT']);
+  if (req.method === 'DELETE') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      await query('delete from casa_state where id = $1', [STATE_ID]);
+      return sendJson(res, 200, { ok: true });
+    } catch (error) {
+      console.error('[state] gagal menghapus state', error);
+      return sendJson(res, 500, { error: 'Gagal menghapus data tersinkronisasi.' });
+    }
+  }
+
+  return methodNotAllowed(res, ['GET', 'PUT', 'DELETE']);
 }

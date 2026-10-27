@@ -180,9 +180,10 @@ export default async function handler(req, res) {
       [id],
     ).catch(() => null);
 
-    console.error('[doku-create] gagal membuat checkout', error);
+    console.error('[doku-create] gagal membuat checkout', id, error);
     return sendJson(res, 502, {
       error: error?.message || 'Gagal membuat link pembayaran DOKU.',
+      invoiceNumber: id,
     });
   }
 }
