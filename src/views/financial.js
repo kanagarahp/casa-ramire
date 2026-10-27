@@ -21,6 +21,7 @@ import {
   updateExpense,
 } from '../services/expenses.js';
 import { getAccrualReport, getProfitLoss } from '../services/reports.js';
+import { createInvoicePaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { buildMessage } from '../services/templates.js';
 import {
   billBadge,
@@ -159,7 +160,8 @@ function invoicesSection() {
                               <div class="flex flex-wrap items-center justify-end gap-1">
                                 ${
                                   invoice.status === 'unpaid'
-                                    ? `<button type="button" class="btn-primary btn-xs" data-action="verify-invoice" data-id="${invoice.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>`
+                                    ? `<button type="button" class="btn-outline btn-xs" data-action="doku-invoice-link" data-id="${invoice.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>
+                                       <button type="button" class="btn-primary btn-xs" data-action="verify-invoice" data-id="${invoice.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>`
                                     : `<button type="button" class="btn-outline btn-xs" data-action="unverify-invoice" data-id="${invoice.id}">Batalkan</button>`
                                 }
                                 ${
@@ -390,6 +392,35 @@ export function render(root) {
       toast('Pengeluaran berhasil dihapus.');
       return;
     }
+    if (action === 'doku-invoice-link') {
+      const invoice = getManualInvoices().find((item) => String(item.id) === String(id));
+      if (!invoice) return;
+      const message = buildMessage('manual', {
+        nama: invoice.tenantName,
+        kamar: invoice.roomNumber,
+        nominal: rupiah(invoice.amount),
+        no_invoice: invoice.number,
+        item_layanan: invoice.item,
+        jatuh_tempo: formatDate(invoice.dueDate),
+      });
+      try {
+        const result = await createInvoicePaymentLink(invoice);
+        openPaymentLinkModal({
+          title: 'Link Pembayaran Invoice',
+          subtitle: `${invoice.tenantName || '—'} • Kamar ${invoice.roomNumber || '—'}`,
+          paymentUrl: result.paymentUrl,
+          invoiceNumber: result.invoiceNumber,
+          amount: result.amount,
+          expiresAt: result.expiresAt,
+          phone: invoice.phone || '',
+          message,
+        });
+      } catch (error) {
+        toast(error.message, 'error');
+      }
+      return;
+    }
+
     if (action === 'verify-invoice') {
       openVerifyModal({ kind: 'invoice', id });
       return;

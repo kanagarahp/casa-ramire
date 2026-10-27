@@ -13,6 +13,45 @@ export function readBody(req) {
   return null;
 }
 
+/**
+ * Read the exact request bytes. DOKU signs the raw JSON body, so webhooks must
+ * verify against this string rather than a re-serialized object.
+ */
+export function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    if (Buffer.isBuffer(req.body)) {
+      resolve(req.body.toString('utf8'));
+      return;
+    }
+
+    if (typeof req.body === 'string' && req.body.length) {
+      resolve(req.body);
+      return;
+    }
+
+    if (req.readableEnded || req.complete) {
+      resolve(req.body && typeof req.body === 'object' ? JSON.stringify(req.body) : '');
+      return;
+    }
+
+    const chunks = [];
+    req.on('data', (chunk) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      if (raw) {
+        resolve(raw);
+        return;
+      }
+      // Last-resort fallback for runtimes that consumed the stream before the
+      // handler. This preserves key order for normal JSON payloads.
+      resolve(req.body && typeof req.body === 'object' ? JSON.stringify(req.body) : '');
+    });
+    req.on('error', reject);
+  });
+}
+
 export function requireAdmin(req, res) {
   const configuredKey = String(process.env.CATALOG_ADMIN_KEY || '').trim();
   const providedKey = String(req.headers['x-admin-key'] || '').trim();

@@ -1,4 +1,6 @@
 import { formatDate, rupiah, todayISO, waLink } from '../core/format.js';
+import { getBill } from '../services/billing.js';
+import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { getCashflowTrend, getDashboardStats } from '../services/reports.js';
 import { buildMessage } from '../services/templates.js';
 import {
@@ -16,6 +18,7 @@ import { icon } from '../ui/icons.js';
 import { openBookingModal, openCheckinFlow, openExtendModal } from './booking-modal.js';
 import { openVerifyModal } from './billing-modals.js';
 import { openTenantDetail } from './tenant-detail.js';
+import { toast } from '../ui/toast.js';
 
 function daysLeftBadge(daysLeft) {
   if (daysLeft < 0) return `<span class="badge-red">Lewat ${Math.abs(daysLeft)} hari</span>`;
@@ -126,6 +129,7 @@ function overdueRows(entries) {
             <div class="flex items-center gap-2 ml-auto">
               <span class="badge-red normal-case tracking-normal">${overdueLabel(daysOverdue)}</span>
               <a href="${waLink(tenant.phone, message)}" target="_blank" rel="noopener" class="btn-ghost btn-xs text-emerald-700" title="Kirim tagihan WhatsApp">${icon('MessageCircle', 'w-4 h-4')}</a>
+              <button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bills[0].id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>
               <button type="button" class="btn-primary btn-xs" data-action="verify-overdue" data-id="${bills[0].id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
             </div>
           </div>`;
@@ -328,6 +332,31 @@ export function render(root) {
     if (action === 'extend') openExtendModal(Number(target.dataset.tenant));
     if (action === 'detail') openTenantDetail(Number(target.dataset.tenant));
     if (action === 'tenant-booking') openBookingModal(Number(target.dataset.room), 'edit_booking');
+    if (action === 'doku-link') {
+      const bill = getBill(Number(target.dataset.id));
+      if (!bill) return;
+      const message = buildMessage('tagihan', {
+        nama: bill.tenantName || 'Penghuni',
+        kamar: bill.roomNumber || '—',
+        nominal: rupiah(bill.amount),
+        jatuh_tempo: formatDate(bill.dueDate),
+        no_invoice: bill.number,
+      });
+      createBillPaymentLink(bill)
+        .then((result) =>
+          openPaymentLinkModal({
+            title: `Link Pembayaran — ${bill.type || 'Tagihan'}`,
+            subtitle: `${bill.tenantName || '—'} • Kamar ${bill.roomNumber || '—'}`,
+            paymentUrl: result.paymentUrl,
+            invoiceNumber: result.invoiceNumber,
+            amount: result.amount,
+            expiresAt: result.expiresAt,
+            phone: bill.phone || '',
+            message,
+          }),
+        )
+        .catch((error) => toast(error.message, 'error'));
+    }
     if (action === 'verify' || action === 'verify-overdue') {
       openVerifyModal({ kind: 'bill', id: Number(target.dataset.id) });
     }

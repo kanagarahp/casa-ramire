@@ -49,6 +49,21 @@ export async function query(text, params = []) {
   return getPool().query(text, params);
 }
 
+export async function withTransaction(fn) {
+  const client = await getPool().connect();
+  try {
+    await client.query('begin');
+    const result = await fn(client);
+    await client.query('commit');
+    return result;
+  } catch (error) {
+    await client.query('rollback').catch(() => null);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function ensureCatalogSchema() {
   if (!schemaPromise) {
     schemaPromise = (async () => {
@@ -66,6 +81,38 @@ export async function ensureCatalogSchema() {
           data text not null,
           created_at timestamptz not null default now()
         )
+      `);
+      await query(`
+        create table if not exists casa_state (
+          id text primary key,
+          data jsonb not null,
+          version integer not null default 1,
+          updated_at timestamptz not null default now()
+        )
+      `);
+      await query(`
+        create table if not exists casa_payments (
+          id text primary key,
+          kind text not null,
+          record_id text,
+          tenant_id text,
+          amount integer not null,
+          status text not null default 'PENDING',
+          payment_url text,
+          doku_ref text,
+          payload jsonb,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now(),
+          paid_at timestamptz
+        )
+      `);
+      await query(`
+        create index if not exists casa_payments_status_idx
+          on casa_payments (status)
+      `);
+      await query(`
+        create index if not exists casa_payments_record_idx
+          on casa_payments (kind, record_id)
       `);
     })().catch((error) => {
       schemaPromise = null;

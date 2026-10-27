@@ -3,6 +3,7 @@ dist/
 .vite/
 .vercel/
 .env*
+!.env.example
 *.local
 .DS_Store
 Thumbs.db

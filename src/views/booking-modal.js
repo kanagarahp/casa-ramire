@@ -19,6 +19,7 @@ import {
   moveTenant,
   saveBooking,
 } from '../services/property.js';
+import { createRenewalPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { computeQuote, getDepositDefault, getPromo, getPromos } from '../services/pricing.js';
 import { esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -281,6 +282,11 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
     body,
     footer: `
       <button type="button" class="btn-outline btn-sm" data-modal-close>Batal</button>
+      ${
+        isExtend
+          ? `<button type="button" class="btn-gold btn-sm" data-doku-extend>${icon('CreditCard', 'w-4 h-4')} Buat Link DOKU</button>`
+          : ''
+      }
       <button type="submit" form="bm-form" class="btn-primary btn-sm" data-submit>
         ${icon(meta.iconName, 'w-4 h-4')} ${meta.submit}
       </button>
@@ -403,30 +409,60 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
       toggleEndField();
       renderSummary();
 
+      const collectPayload = () => ({
+        name: value('#bm-name'),
+        phone: value('#bm-phone'),
+        job: value('#bm-job'),
+        periode: periodeSelect.value,
+        startDate: startInput.value,
+        endDate: endInput.value || undefined,
+        promo: getPromoValue(),
+        addons,
+        depositEnabled: Boolean(depositToggle?.checked),
+        depositValue: toNumber(value('#bm-deposit')),
+        payOption: getPayOption(),
+        notes: value('#bm-notes'),
+        emergencyContact: {
+          name: value('#bm-ec-name'),
+          relation: value('#bm-ec-relation'),
+          phone: value('#bm-ec-phone'),
+        },
+      });
+
+      el.querySelector('[data-doku-extend]')?.addEventListener('click', async () => {
+        const quote = renderSummary();
+        if (!quote) return;
+
+        const payload = collectPayload();
+        try {
+          const result = await createRenewalPaymentLink({
+            ...quote,
+            tenantId: tenant.id,
+            addons: payload.addons,
+          });
+
+          close();
+          openPaymentLinkModal({
+            title: 'Link Pembayaran Perpanjangan',
+            subtitle: `${tenant.name} • Kamar ${tenant.roomNumber}`,
+            paymentUrl: result.paymentUrl,
+            invoiceNumber: result.invoiceNumber,
+            amount: result.amount,
+            expiresAt: result.expiresAt,
+            phone: tenant.phone || '',
+            message: `Halo Kak ${tenant.name}, berikut tagihan perpanjangan sewa Kamar ${tenant.roomNumber} Casa Ramire sebesar ${rupiah(quote.grandTotal)}. Pembayaran dapat dilakukan melalui link DOKU berikut.`,
+          });
+        } catch (error) {
+          toast(error.message, 'error');
+        }
+      });
+
       form.addEventListener('submit', (event) => {
         event.preventDefault();
         const quote = renderSummary();
         if (!quote) return;
 
-        const payload = {
-          name: value('#bm-name'),
-          phone: value('#bm-phone'),
-          job: value('#bm-job'),
-          periode: periodeSelect.value,
-          startDate: startInput.value,
-          endDate: endInput.value || undefined,
-          promo: getPromoValue(),
-          addons,
-          depositEnabled: Boolean(depositToggle?.checked),
-          depositValue: toNumber(value('#bm-deposit')),
-          payOption: getPayOption(),
-          notes: value('#bm-notes'),
-          emergencyContact: {
-            name: value('#bm-ec-name'),
-            relation: value('#bm-ec-relation'),
-            phone: value('#bm-ec-phone'),
-          },
-        };
+        const payload = collectPayload();
 
         try {
           if (mode === 'booking' || mode === 'edit_booking') {

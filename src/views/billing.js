@@ -11,6 +11,7 @@ import {
   getBills,
   markBillUnpaid,
 } from '../services/billing.js';
+import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { buildMessage } from '../services/templates.js';
 import {
   billBadge,
@@ -74,6 +75,7 @@ function billRow(bill) {
           ${
             bill.status === 'unpaid'
               ? `
+                <button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bill.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>
                 <button type="button" class="btn-primary btn-xs" data-action="verify" data-id="${bill.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
                 ${
                   bill.phone
@@ -269,6 +271,34 @@ export function render(root) {
 
     if (action === 'add-invoice') {
       openManualInvoiceModal();
+      return;
+    }
+
+    if (action === 'doku-link') {
+      const bill = getBills().find((item) => String(item.id) === String(id));
+      if (!bill) return;
+      const message = buildMessage('tagihan', {
+        nama: bill.tenantName || 'Penghuni',
+        kamar: bill.roomNumber || '—',
+        nominal: rupiah(bill.amount),
+        jatuh_tempo: formatDate(bill.dueDate),
+        no_invoice: bill.number,
+      });
+      try {
+        const result = await createBillPaymentLink(bill);
+        openPaymentLinkModal({
+          title: `Link Pembayaran — ${bill.type || 'Tagihan'}`,
+          subtitle: `${bill.tenantName || '—'} • Kamar ${bill.roomNumber || '—'}`,
+          paymentUrl: result.paymentUrl,
+          invoiceNumber: result.invoiceNumber,
+          amount: result.amount,
+          expiresAt: result.expiresAt,
+          phone: bill.phone || '',
+          message,
+        });
+      } catch (error) {
+        toast(error.message, 'error');
+      }
       return;
     }
 

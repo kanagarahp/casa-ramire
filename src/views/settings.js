@@ -8,6 +8,7 @@ import {
 import { changeOwnPassword, getActiveUser, isOwner } from '../services/auth.js';
 import { publishCatalog } from '../services/catalog.js';
 import { updateSettings } from '../services/settings.js';
+import { syncNow } from '../services/sync.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { downloadFile, esc, readFileAsText, setBusy } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -128,9 +129,10 @@ export function openSettingsModal() {
               </div>
 
               <div class="rounded-xl border border-line bg-cream/60 p-3">
-                <label class="label" for="set-catalog-key">Kunci publikasi katalog</label>
+                <label class="label" for="set-catalog-key">Kunci admin (katalog, sinkronisasi &amp; pembayaran)</label>
                 <input id="set-catalog-key" type="password" class="input" value="${esc(settings.catalogAdminKey || '')}" placeholder="Masukkan kunci dari owner" autocomplete="off" />
-                <p class="hint mt-1">Kunci ini hanya disimpan di perangkat ini dan dipakai untuk mengunggah foto serta mempublikasikan katalog. Jangan bagikan.</p>
+                <p class="hint mt-1">Kunci ini hanya disimpan di perangkat ini. Dipakai untuk publikasi katalog, sinkronisasi data, dan membuat link pembayaran DOKU. Jangan bagikan.</p>
+                <p class="hint mt-1">Setelah kunci diisi, data akan disinkronkan otomatis dan status pembayaran DOKU diperbarui tanpa input manual.</p>
               </div>
 
               <div class="flex flex-wrap items-center gap-2">
@@ -212,6 +214,7 @@ export function openSettingsModal() {
       const saveCatalogProfile = () => {
         const values = readCatalogForm();
         updateSettings(values);
+        syncNow();
         return values;
       };
 

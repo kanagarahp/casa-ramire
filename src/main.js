@@ -4,6 +4,7 @@ import { NAV_ITEMS, PAGE_META } from './core/constants.js';
 import { getRoute, navigate, onRouteChange } from './core/router.js';
 import { subscribe } from './core/store.js';
 import { getActiveUser, isOwner } from './services/auth.js';
+import { startSync, stopSync } from './services/sync.js';
 import { closeAllModals } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 
@@ -87,6 +88,7 @@ function render() {
   }
 
   if (!user) {
+    stopSync();
     if (lastUserId !== null) closeAllModals();
     lastUserId = null;
     lastRoute = null;
@@ -100,6 +102,8 @@ function render() {
     document.title = 'Masuk — Casa Ramire';
     return;
   }
+
+  startSync();
 
   if (OWNER_ONLY.has(route) && !isOwner()) {
     toast('Halaman tersebut hanya dapat diakses oleh owner.', 'warning');
