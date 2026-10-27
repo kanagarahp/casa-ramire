@@ -169,6 +169,60 @@ export function deleteUser(id) {
   });
 }
 
+/**
+ * Reset an owner password using the Casa Ramire admin key.
+ *
+ * The admin key is the same secret used for state sync, catalog publishing,
+ * and DOKU payment links. It is verified against the local settings (offline
+ * fallback) or against /api/state (online). The new password hash is stored
+ * only on this device, consistent with the app's local-first auth model.
+ */
+export async function resetPasswordWithRecoveryKey({ username, newPassword, recoveryKey }) {
+  const normalized = String(username || '').trim().toLowerCase();
+  const key = String(recoveryKey || '').trim();
+
+  if (!normalized) throw new Error('Username owner wajib diisi.');
+  if (!key) throw new Error('Kunci admin wajib diisi.');
+  validatePassword(newPassword);
+
+  const state = getState();
+  const user = state.users.find((item) => item.username.toLowerCase() === normalized);
+  if (!user) throw new Error('Username owner tidak ditemukan di perangkat ini.');
+  if (user.role !== 'owner') {
+    throw new Error('Reset mandiri hanya untuk akun owner. Minta owner mereset akun staf.');
+  }
+
+  let verified = String(state.settings?.catalogAdminKey || '').trim() === key;
+
+  if (!verified) {
+    let response;
+    try {
+      response = await fetch('/api/state', {
+        headers: { Accept: 'application/json', 'x-admin-key': key },
+        cache: 'no-store',
+      });
+    } catch {
+      throw new Error(
+        'Tidak dapat memverifikasi kunci admin. Periksa koneksi internet atau masukkan kunci yang tersimpan di perangkat ini.',
+      );
+    }
+
+    if (response.status === 401) throw new Error('Kunci admin tidak valid.');
+    if (!response.ok) throw new Error('Verifikasi kunci admin gagal. Coba lagi.');
+    verified = true;
+  }
+
+  if (!verified) throw new Error('Kunci admin tidak valid.');
+
+  update((draft) => {
+    const target = draft.users.find((item) => item.username.toLowerCase() === normalized);
+    target.passHash = hashPassword(newPassword);
+    target.updatedAt = new Date().toISOString();
+  });
+
+  return getState().users.find((item) => item.username.toLowerCase() === normalized);
+}
+
 export function changeOwnPassword(currentPassword, newPassword) {
   const user = getActiveUser();
   if (!user) throw new Error('Sesi tidak valid.');
