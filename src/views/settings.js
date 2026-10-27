@@ -141,6 +141,10 @@ export function openSettingsModal() {
               <p class="hint" data-published-at>
                 Terakhir dipublikasikan: ${settings.catalogPublishedAt ? formatDateTime(settings.catalogPublishedAt) : 'belum pernah'}.
               </p>
+              <p class="hint">
+                Tips: unggah beberapa foto lalu klik Publikasikan. Foto yang sudah terbit otomatis dilepas dari penyimpanan
+                lokal agar kuota browser tetap lega.
+              </p>
             </form>
           `,
         })}
@@ -257,7 +261,9 @@ export function openSettingsModal() {
       });
 
       el.querySelector('[data-action="export-backup"]')?.addEventListener('click', () => {
-        const snapshot = getState();
+        const snapshot = JSON.parse(JSON.stringify(getState()));
+        // Never include the catalog publish key in a file that might be shared.
+        if (snapshot.settings) delete snapshot.settings.catalogAdminKey;
         const stamp = new Date().toISOString().slice(0, 10);
         downloadFile(`casa-ramire-backup-${stamp}.json`, JSON.stringify(snapshot, null, 2));
         toast('Backup berhasil diunduh.');

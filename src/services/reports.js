@@ -135,11 +135,16 @@ export function getOverdueTenants() {
     groups.set(key, entry);
   }
 
-  return [...groups.values()].sort(
-    (a, b) =>
-      b.daysOverdue - a.daysOverdue ||
-      a.name.localeCompare(b.name, 'id'),
-  );
+  return [...groups.values()]
+    .map((entry) => ({
+      ...entry,
+      bills: [...entry.bills].sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate))),
+    }))
+    .sort(
+      (a, b) =>
+        b.daysOverdue - a.daysOverdue ||
+        a.name.localeCompare(b.name, 'id'),
+    );
 }
 
 /**
