@@ -11,7 +11,9 @@ import {
   getBills,
   markBillUnpaid,
 } from '../services/billing.js';
+import { getState } from '../core/store.js';
 import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
+import { sendBillByEmail } from '../services/billing-notify.js';
 import { buildMessage } from '../services/templates.js';
 import {
   billBadge,
@@ -43,8 +45,18 @@ function isOverdue(bill) {
   return bill.status === 'unpaid' && Boolean(bill.dueDate) && bill.dueDate < todayISO();
 }
 
+function emailOf(record) {
+  return String(
+    record?.email ||
+      getState().tenants.find((tenant) => String(tenant.id) === String(record?.tenantId))
+        ?.email ||
+      '',
+  ).trim();
+}
+
 function billRow(bill) {
   const overdue = isOverdue(bill);
+  const email = emailOf(bill);
   const message = buildMessage('tagihan', {
     nama: bill.tenantName || 'Penghuni',
     kamar: bill.roomNumber || '—',
@@ -59,6 +71,7 @@ function billRow(bill) {
       <td>
         <p class="font-bold text-stone-800">${esc(bill.tenantName || '—')}</p>
         <p class="text-[10px] text-stone-600">Kamar ${esc(bill.roomNumber || '—')}</p>
+        ${email ? `<p class="text-[10px] text-stone-500 truncate max-w-[180px]">${esc(email)}</p>` : ''}
       </td>
       <td>
         <p class="font-semibold text-stone-700">${esc(bill.type || 'Sewa')}</p>
@@ -76,6 +89,7 @@ function billRow(bill) {
             bill.status === 'unpaid'
               ? `
                 <button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bill.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>
+                <button type="button" class="btn-outline btn-xs" data-action="email-bill" data-id="${bill.id}" ${email ? '' : 'disabled title="Email penghuni belum diisi"'}>${icon('Send', 'w-3 h-3')} Kirim Tagihan</button>
                 <button type="button" class="btn-primary btn-xs" data-action="verify" data-id="${bill.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
                 ${
                   bill.phone
@@ -294,6 +308,8 @@ export function render(root) {
           amount: result.amount,
           expiresAt: result.expiresAt,
           phone: bill.phone || '',
+          email: emailOf(bill),
+          recipientName: bill.tenantName || '',
           message,
         });
       } catch (error) {
@@ -304,6 +320,31 @@ export function render(root) {
 
     if (action === 'verify') {
       openVerifyModal({ kind: 'bill', id });
+      return;
+    }
+
+    if (action === 'email-bill') {
+      const bill = getBills().find((item) => String(item.id) === String(id));
+      if (!bill) return;
+      const email = emailOf(bill);
+      if (!email) {
+        toast('Email penghuni belum diisi.', 'warning');
+        return;
+      }
+      target.disabled = true;
+      try {
+        const { delivery } = await sendBillByEmail(bill);
+        toast(
+          delivery.sent
+            ? `Tagihan dikirim ke ${email}.`
+            : 'Email belum dikonfigurasi. Aplikasi email perangkat dibuka sebagai gantinya.',
+          delivery.sent ? 'success' : 'warning',
+        );
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        target.disabled = false;
+      }
       return;
     }
 

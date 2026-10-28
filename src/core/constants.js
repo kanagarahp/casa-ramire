@@ -6,7 +6,11 @@
 export const APP_NAME = 'Casa Ramire';
 export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
+
+/** Flat monthly surcharge for tenants who bring a car. */
+export const CAR_FEE = 130000;
+export const CAR_ADDON_NAME = 'Parkir Mobil';
 export const SESSION_KEY = 'casa-ramire:session';
 
 export const ROLES = {
@@ -79,15 +83,41 @@ export const DEFAULT_PRICING = {
 };
 
 export const DEFAULT_ADDONS = [
-  { name: 'Parkir Mobil', price: 100000, active: true },
+  { name: CAR_ADDON_NAME, price: CAR_FEE, active: true },
   { name: 'Kulkas Dalam Kamar', price: 75000, active: true },
   { name: 'Dispenser & Aqua', price: 50000, active: true },
 ];
 
+/**
+ * Promo codes are redeemed by prospective tenants on the landing page.
+ * `maxUses: 0` means the code can be used unlimited times.
+ */
 export const DEFAULT_PROMOS = [
-  { name: 'Diskon Awal Tahun', type: 'rupiah', value: 200000, active: true },
-  { name: 'Promo Mahasiswa 5%', type: 'persen', value: 5, active: true },
+  {
+    name: 'Diskon Awal Tahun',
+    code: 'AWALTAHUN',
+    type: 'rupiah',
+    value: 200000,
+    active: true,
+    maxUses: 1,
+    usedCount: 0,
+  },
+  {
+    name: 'Promo Mahasiswa 5%',
+    code: 'MAHASISWA5',
+    type: 'persen',
+    value: 5,
+    active: true,
+    maxUses: 0,
+    usedCount: 0,
+  },
 ];
+
+export const BOOKING_REQUEST_STATUS = {
+  pending: { label: 'Menunggu', badge: 'badge-amber' },
+  confirmed: { label: 'Dikonversi', badge: 'badge-green' },
+  rejected: { label: 'Ditolak', badge: 'badge-gray' },
+};
 
 export const DEFAULT_EXPENSE_CATEGORIES = [
   'Gaji HK / Kebersihan',
@@ -125,9 +155,11 @@ export const DEFAULT_SETTINGS = {
   tagline: 'Kos nyaman, tenang, dan strategis.',
   description:
     'Kamar deluxe dengan fasilitas lengkap di lingkungan yang tenang. Cocok untuk mahasiswa dan pekerja yang ingin tinggal jangka panjang.',
-  address: 'Kos Casa Ramire',
+  address: 'Kos Casa Ramire, Yogyakarta',
   whatsapp: '081116623661',
-  mapsUrl: '',
+  email: 'casaramirejogja@gmail.com',
+  mapsUrl: 'https://www.google.com/maps/search/?api=1&query=casa+ramire+kost+jogja',
+  mapsEmbedUrl: 'https://maps.google.com/maps?q=casa%20ramire%20kost%20jogja&z=16&output=embed',
   facilities: 'AC, WiFi, kasur, lemari, meja kerja, kamar mandi dalam',
   depositDefault: DEFAULT_DEPOSIT,
   catalogAdminKey: '',
@@ -136,7 +168,9 @@ export const DEFAULT_SETTINGS = {
 
 export const NAV_ITEMS = [
   { path: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
+  { path: 'bookings', label: 'Booking Online', icon: 'Inbox' },
   { path: 'rooms', label: 'Status Kamar', icon: 'Building2' },
+  { path: 'gallery', label: 'Galeri Landing', icon: 'Image' },
   { path: 'pricing', label: 'Pricelist & Diskon', icon: 'Tags' },
   { path: 'addons', label: 'Master Add-On', icon: 'CirclePlus' },
   { path: 'tenants', label: 'Penghuni & Kontrak', icon: 'Users' },
@@ -148,7 +182,9 @@ export const NAV_ITEMS = [
 
 export const PAGE_META = {
   dashboard: { title: 'Dashboard', subtitle: 'Ringkasan operasional properti' },
+  bookings: { title: 'Booking Online', subtitle: 'Permintaan booking dari landing page' },
   rooms: { title: 'Status Kamar', subtitle: 'Inventaris dan okupansi kamar' },
+  gallery: { title: 'Galeri Landing', subtitle: 'Foto yang tampil di halaman publik' },
   pricing: { title: 'Pricelist & Diskon', subtitle: 'Strategi tarif dan promo' },
   addons: { title: 'Master Add-On', subtitle: 'Layanan tambahan berbayar' },
   tenants: { title: 'Penghuni & Kontrak', subtitle: 'Direktori dan riwayat sewa' },

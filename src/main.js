@@ -10,7 +10,9 @@ import { toast } from './ui/toast.js';
 
 import * as homeView from './views/home.js';
 import * as dashboardView from './views/dashboard.js';
+import * as bookingsView from './views/bookings.js';
 import * as roomsView from './views/rooms.js';
+import * as galleryView from './views/gallery.js';
 import * as pricingView from './views/pricing.js';
 import * as addonsView from './views/addons.js';
 import * as tenantsView from './views/tenants.js';
@@ -26,7 +28,9 @@ const app = document.getElementById('app');
 
 const VIEWS = {
   dashboard: dashboardView,
+  bookings: bookingsView,
   rooms: roomsView,
+  gallery: galleryView,
   pricing: pricingView,
   addons: addonsView,
   tenants: tenantsView,
@@ -145,6 +149,7 @@ function render() {
 }
 
 subscribe(scheduleRender);
+onRouteChange(() => closeAllModals());
 onRouteChange(scheduleRender);
 
 if (!window.location.hash) {

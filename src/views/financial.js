@@ -11,6 +11,7 @@ import {
   getManualInvoices,
   markManualInvoiceUnpaid,
 } from '../services/billing.js';
+import { getState } from '../core/store.js';
 import {
   addExpense,
   addExpenseCategory,
@@ -21,6 +22,7 @@ import {
   updateExpense,
 } from '../services/expenses.js';
 import { getAccrualReport, getProfitLoss } from '../services/reports.js';
+import { sendInvoiceByEmail } from '../services/billing-notify.js';
 import { createInvoicePaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { buildMessage } from '../services/templates.js';
 import {
@@ -39,6 +41,15 @@ import { toast } from '../ui/toast.js';
 import { openManualInvoiceModal, openVerifyModal } from './billing-modals.js';
 
 let activeTab = 'expenses';
+
+function invoiceEmail(invoice) {
+  return String(
+    invoice?.email ||
+      getState().tenants.find((tenant) => String(tenant.id) === String(invoice?.tenantId))
+        ?.email ||
+      '',
+  ).trim();
+}
 
 const TABS = [
   { id: 'expenses', label: 'Jurnal Pengeluaran', iconName: 'ScrollText' },
@@ -138,6 +149,7 @@ function invoicesSection() {
                 invoices.length
                   ? invoices
                       .map((invoice) => {
+                        const email = invoiceEmail(invoice);
                         const message = buildMessage('manual', {
                           nama: invoice.tenantName,
                           kamar: invoice.roomNumber,
@@ -151,9 +163,12 @@ function invoicesSection() {
                             <td class="font-mono text-[11px] font-bold text-stone-700 whitespace-nowrap">${esc(invoice.number)}</td>
                             <td>
                               <p class="font-bold text-stone-800">${esc(invoice.tenantName || '—')}</p>
-                              <p class="text-[10px] text-stone-600">Kamar ${esc(invoice.roomNumber || '—')}</p>
+                              <p class="text-[10px] text-stone-600">Kamar ${esc(invoice.roomNumber || '—')}${email ? ` · ${esc(email)}` : ''}</p>
                             </td>
-                            <td class="font-semibold text-stone-700">${esc(invoice.item)}</td>
+                            <td>
+                              <p class="font-semibold text-stone-700">${esc(invoice.item)}</p>
+                              <p class="text-[10px] text-stone-500">${formatDate(invoice.dueDate)}</p>
+                            </td>
                             <td class="font-black text-stone-800 whitespace-nowrap">${rupiah(invoice.amount)}</td>
                             <td>${billBadge(invoice.status)}</td>
                             <td>
@@ -161,6 +176,7 @@ function invoicesSection() {
                                 ${
                                   invoice.status === 'unpaid'
                                     ? `<button type="button" class="btn-outline btn-xs" data-action="doku-invoice-link" data-id="${invoice.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>
+                                       <button type="button" class="btn-outline btn-xs" data-action="email-invoice" data-id="${invoice.id}" ${email ? '' : 'disabled title="Email belum diisi"'}>${icon('Send', 'w-3 h-3')} Kirim Tagihan</button>
                                        <button type="button" class="btn-primary btn-xs" data-action="verify-invoice" data-id="${invoice.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>`
                                     : `<button type="button" class="btn-outline btn-xs" data-action="unverify-invoice" data-id="${invoice.id}">Batalkan</button>`
                                 }
@@ -413,6 +429,8 @@ export function render(root) {
           amount: result.amount,
           expiresAt: result.expiresAt,
           phone: invoice.phone || '',
+          email: invoiceEmail(invoice),
+          recipientName: invoice.tenantName || '',
           message,
         });
       } catch (error) {
@@ -423,6 +441,31 @@ export function render(root) {
 
     if (action === 'verify-invoice') {
       openVerifyModal({ kind: 'invoice', id });
+      return;
+    }
+
+    if (action === 'email-invoice') {
+      const invoice = getManualInvoices().find((item) => String(item.id) === String(id));
+      if (!invoice) return;
+      const email = invoiceEmail(invoice);
+      if (!email) {
+        toast('Email penerima belum diisi.', 'warning');
+        return;
+      }
+      target.disabled = true;
+      try {
+        const { delivery } = await sendInvoiceByEmail(invoice);
+        toast(
+          delivery.sent
+            ? `Tagihan dikirim ke ${email}.`
+            : 'Email belum dikonfigurasi. Aplikasi email perangkat dibuka sebagai gantinya.',
+          delivery.sent ? 'success' : 'warning',
+        );
+      } catch (error) {
+        toast(error.message, 'error');
+      } finally {
+        target.disabled = false;
+      }
       return;
     }
     if (action === 'unverify-invoice') {

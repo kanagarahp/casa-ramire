@@ -4,6 +4,7 @@ import { icon } from '../ui/icons.js';
 import { openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { getSettings } from './settings.js';
+import { sendPaymentEmail } from './email.js';
 import { ensureSynced } from './sync.js';
 
 function adminKey() {
@@ -103,6 +104,8 @@ export function openPaymentLinkModal({
   amount = 0,
   expiresAt = '',
   phone = '',
+  email = '',
+  recipientName = '',
   message = '',
 }) {
   if (!paymentUrl) {
@@ -157,6 +160,11 @@ export function openPaymentLinkModal({
                 </a>`
               : ''
           }
+          ${
+            email
+              ? `<button type="button" class="btn-outline btn-sm text-brand" data-send-email>${icon('Send', 'w-4 h-4')} Kirim via Email</button>`
+              : ''
+          }
         </div>
       </div>
     `,
@@ -169,6 +177,31 @@ export function openPaymentLinkModal({
         } catch {
           el.querySelector('#pay-link')?.select();
           toast('Salin link secara manual.', 'warning');
+        }
+      });
+
+      el.querySelector('[data-send-email]')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          const result = await sendPaymentEmail({
+            to: email,
+            name: recipientName || subtitle,
+            title,
+            invoiceNumber,
+            amount,
+            paymentUrl,
+            expiresAt,
+          });
+          if (result.sent) {
+            toast(`Tagihan berhasil dikirim ke ${email}.`);
+          } else {
+            toast('Email belum dikonfigurasi. Aplikasi email perangkat dibuka sebagai gantinya.', 'warning');
+          }
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          button.disabled = false;
         }
       });
 

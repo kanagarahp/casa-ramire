@@ -1,4 +1,4 @@
-import { PERIODS } from '../core/constants.js';
+import { CAR_ADDON_NAME, CAR_FEE, PERIODS } from '../core/constants.js';
 import {
   addDays,
   addMonths,
@@ -148,7 +148,83 @@ export function getPromo(id) {
   return getState().promos.find((promo) => String(promo.id) === String(id) && promo.active) || null;
 }
 
-export function savePromo({ id = null, name, type, value, active = true }) {
+export function normalizePromoCode(value) {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '')
+    .slice(0, 24);
+}
+
+/** Look up an active promo by its public promo code. */
+export function getPromoByCode(code) {
+  const normalized = normalizePromoCode(code);
+  if (!normalized) return null;
+  return (
+    (getState().promos || []).find(
+      (promo) => promo.active && normalizePromoCode(promo.code) === normalized,
+    ) || null
+  );
+}
+
+/** Remaining redemptions; `Infinity` means unlimited. */
+export function getPromoRemaining(promo) {
+  if (!promo) return 0;
+  const max = Math.max(0, Number(promo.maxUses) || 0);
+  if (!max) return Infinity;
+  return Math.max(0, max - (Number(promo.usedCount) || 0));
+}
+
+/**
+ * Apply the server-side redemption ledger to local promos (so admins see the
+ * same remaining quota as the landing page).
+ */
+export function syncPromoUsage(usage = []) {
+  if (!Array.isArray(usage) || !usage.length) return;
+  const byCode = new Map(
+    usage.map((item) => [normalizePromoCode(item.code), item]).filter(([code]) => code),
+  );
+  const changed = (getState().promos || []).some((promo) => {
+    const entry = byCode.get(normalizePromoCode(promo.code));
+    if (!entry) return false;
+    return (
+      Number(entry.maxUses || 0) !== Number(promo.maxUses || 0) ||
+      Number(entry.usedCount || 0) !== Number(promo.usedCount || 0)
+    );
+  });
+  if (!changed) return;
+
+  update((draft) => {
+    for (const promo of draft.promos || []) {
+      const entry = byCode.get(normalizePromoCode(promo.code));
+      if (!entry) continue;
+      promo.maxUses = Math.max(0, Number(entry.maxUses) || 0);
+      promo.usedCount = Math.max(0, Number(entry.usedCount) || 0);
+    }
+  });
+}
+
+/** Add-on line used when a prospective tenant brings a car. */
+export function carAddon() {
+  return { id: 'car-parking', name: CAR_ADDON_NAME, price: CAR_FEE };
+}
+
+export function hasCarAddon(addons = []) {
+  return addons.some(
+    (addon) =>
+      String(addon?.id) === 'car-parking' ||
+      String(addon?.name || '').toLowerCase() === CAR_ADDON_NAME.toLowerCase(),
+  );
+}
+
+export function savePromo({
+  id = null,
+  name,
+  code,
+  type,
+  value,
+  active = true,
+  maxUses = 0,
+}) {
   const cleanName = String(name || '').trim();
   if (!cleanName) throw new Error('Nama promo wajib diisi.');
   if (!['rupiah', 'persen'].includes(type)) throw new Error('Tipe diskon tidak valid.');
@@ -156,18 +232,42 @@ export function savePromo({ id = null, name, type, value, active = true }) {
   if (cleanValue <= 0) throw new Error('Nilai diskon harus lebih dari 0.');
   if (type === 'persen' && cleanValue > 100) throw new Error('Diskon persen maksimal 100%.');
 
+  const cleanCode = normalizePromoCode(code);
+  if (cleanCode.length < 3) {
+    throw new Error('Kode promo minimal 3 karakter (huruf/angka).');
+  }
+
+  const duplicate = (getState().promos || []).find(
+    (promo) =>
+      String(promo.id) !== String(id) && normalizePromoCode(promo.code) === cleanCode,
+  );
+  if (duplicate) throw new Error(`Kode promo ${cleanCode} sudah dipakai promo lain.`);
+
+  const quota = Math.max(0, Math.round(toNumber(maxUses)));
+
   update((draft) => {
     if (id) {
       const target = draft.promos.find((promo) => String(promo.id) === String(id));
       if (!target) throw new Error('Promo tidak ditemukan.');
-      Object.assign(target, { name: cleanName, type, value: cleanValue, active: Boolean(active) });
+      Object.assign(target, {
+        name: cleanName,
+        code: cleanCode,
+        type,
+        value: cleanValue,
+        active: Boolean(active),
+        maxUses: quota,
+        usedCount: Math.max(0, Number(target.usedCount) || 0),
+      });
     } else {
       draft.promos.push({
         id: nextId(draft.promos),
         name: cleanName,
+        code: cleanCode,
         type,
         value: cleanValue,
         active: Boolean(active),
+        maxUses: quota,
+        usedCount: 0,
       });
     }
   });

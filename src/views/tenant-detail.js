@@ -5,6 +5,8 @@ import {
   getOutstandingForTenant,
   getRoomOfTenant,
   getTenant,
+  tenantStayDays,
+  tenantStayLabel,
   updateTenant,
 } from '../services/property.js';
 import { avatar, billBadge } from '../ui/components.js';
@@ -63,9 +65,24 @@ export function openTenantDetail(tenantId) {
       status: invoice.status,
       note: invoice.status === 'paid' ? invoice.method : 'Belum dibayar',
     })),
-  ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  ];
+  const billedRows = [...payments];
+  const paymentRows = (tenant.payments || []).map((payment) => ({
+    key: `payment-${payment.id}`,
+    label: payment.type || 'Pembayaran',
+    date: payment.date || payment.createdAt,
+    amount: payment.amount,
+    status: 'paid',
+    note: [payment.method, payment.note].filter(Boolean).join(' · '),
+  }));
 
-  if (toNumber(tenant.depositPaid) > 0) {
+  if (paymentRows.length) {
+    payments.length = 0;
+    payments.push(
+      ...paymentRows,
+      ...billedRows.filter((row) => row.status !== 'paid'),
+    );
+  } else if (toNumber(tenant.depositPaid) > 0) {
     payments.unshift({
       key: 'deposit',
       label: 'Deposit / jaminan',
@@ -76,15 +93,19 @@ export function openTenantDetail(tenantId) {
     });
   }
 
+  payments.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
   const paidTotal = payments
     .filter((payment) => payment.status === 'paid')
     .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
   const unpaidTotal = payments
     .filter((payment) => payment.status !== 'paid')
     .reduce((sum, payment) => sum + toNumber(payment.amount), 0);
+  const lastPayment = payments.find((payment) => payment.status === 'paid') || null;
 
   const isActive = tenant.status === 'aktif';
   const history = tenant.stayHistory || [];
+  const stayDays = tenantStayDays(tenant);
 
   const body = `
     <div class="space-y-5">
@@ -95,6 +116,11 @@ export function openTenantDetail(tenantId) {
             <h2 class="font-black text-stone-800 text-lg leading-tight">${esc(tenant.name)}</h2>
             <p class="text-xs text-stone-500 mt-0.5">
               ${isActive ? `Kamar ${esc(room?.nomor || tenant.roomNumber || '—')} · ${esc(tenant.periode || '')} ${tenant.periode === 'harian' ? 'hari' : tenant.periode === 'mingguan' ? 'minggu' : 'bulan'}` : 'Sudah check-out'}
+            </p>
+            <p class="text-[11px] font-bold text-gold-700 mt-1 flex items-center gap-1.5">
+              ${icon('Clock', 'w-3.5 h-3.5')}
+              ${isActive ? `Sudah tinggal ${tenantStayLabel(tenant)}` : `Tinggal ${tenantStayLabel(tenant)}`}
+              <span class="text-stone-400 font-normal">(${stayDays} hari sejak ${formatDate(tenant.checkinDate || tenant.startDate)})</span>
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -107,6 +133,14 @@ export function openTenantDetail(tenantId) {
           <div><p class="text-stone-600 font-bold uppercase text-[9px]">Berakhir</p><p class="font-bold text-stone-700">${formatDate(tenant.endDate)}</p></div>
           <div><p class="text-stone-600 font-bold uppercase text-[9px]">Nilai kontrak</p><p class="font-bold text-stone-700">${rupiah(tenant.contractTotal)}</p></div>
           <div><p class="text-stone-600 font-bold uppercase text-[9px]">Sisa tagihan</p><p class="font-bold ${outstanding > 0 ? 'text-rose-700' : 'text-emerald-700'}">${rupiah(outstanding)}</p></div>
+        </div>
+        <div class="mt-3 pt-3 border-t border-line-soft flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-stone-600">
+          <span class="flex items-center gap-1.5">${icon('CreditCard', 'w-3.5 h-3.5 text-emerald-700')} Pembayaran terakhir:
+            <b class="text-stone-800">${lastPayment ? `${formatDate(lastPayment.date)} · ${rupiah(lastPayment.amount)}` : 'belum ada'}</b>
+          </span>
+          <span class="flex items-center gap-1.5">${icon('Repeat', 'w-3.5 h-3.5 text-gold-700')} Pindah kamar:
+            <b class="text-stone-800">${Math.max(0, history.length - 1)} kali</b>
+          </span>
         </div>
       </div>
 
@@ -126,7 +160,11 @@ export function openTenantDetail(tenantId) {
             <label class="label" for="td-phone">No. WhatsApp</label>
             <input id="td-phone" type="tel" class="input" value="${esc(tenant.phone)}" />
           </div>
-          <div class="sm:col-span-2">
+          <div>
+            <label class="label" for="td-email">Email</label>
+            <input id="td-email" type="email" class="input" placeholder="nama@email.com" value="${esc(tenant.email || '')}" />
+          </div>
+          <div>
             <label class="label" for="td-job">Pekerjaan / instansi</label>
             <input id="td-job" type="text" class="input" value="${esc(tenant.job || '')}" />
           </div>
@@ -184,7 +222,7 @@ export function openTenantDetail(tenantId) {
       </div>
 
       <div id="dt-payment" class="hidden space-y-4">
-        <div class="grid sm:grid-cols-3 gap-3">
+        <div class="grid sm:grid-cols-4 gap-3">
           <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
             <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Total dibayar</p>
             <p class="font-black text-emerald-900 text-lg">${rupiah(paidTotal)}</p>
@@ -196,6 +234,11 @@ export function openTenantDetail(tenantId) {
           <div class="rounded-2xl border border-line bg-white p-3">
             <p class="text-[10px] font-bold uppercase tracking-wider text-stone-600">Nilai kontrak</p>
             <p class="font-black text-stone-800 text-lg">${rupiah(tenant.contractTotal)}</p>
+          </div>
+          <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-amber-800">Pembayaran terakhir</p>
+            <p class="font-black text-amber-900 text-sm">${lastPayment ? formatDate(lastPayment.date) : '—'}</p>
+            <p class="text-[10px] text-amber-800">${lastPayment ? rupiah(lastPayment.amount) : 'Belum ada'}</p>
           </div>
         </div>
 
@@ -269,6 +312,7 @@ export function openTenantDetail(tenantId) {
           updateTenant(tenant.id, {
             name: el.querySelector('#td-name').value,
             phone: el.querySelector('#td-phone').value,
+            email: el.querySelector('#td-email').value,
             job: el.querySelector('#td-job').value,
             notes: el.querySelector('#td-notes').value,
             emergencyContact: {

@@ -171,6 +171,11 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
           <label class="label" for="bm-phone">No. WhatsApp <span class="text-rose-500">*</span></label>
           <input id="bm-phone" type="tel" class="input" placeholder="cth: 08123456789" value="${esc(booking?.phone || '')}" required />
         </div>
+        <div>
+          <label class="label" for="bm-email">Email penghuni</label>
+          <input id="bm-email" type="email" class="input" placeholder="cth: nama@email.com" value="${esc(booking?.email || '')}" />
+          <p class="hint mt-1">Dipakai untuk kirim tagihan & link pembayaran.</p>
+        </div>
         <div class="sm:col-span-2">
           <label class="label" for="bm-job">Pekerjaan / Instansi</label>
           <input id="bm-job" type="text" class="input" placeholder="Mahasiswa / Karyawan" value="${esc(booking?.job || '')}" />
@@ -413,6 +418,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
       const collectPayload = () => ({
         name: value('#bm-name'),
         phone: value('#bm-phone'),
+        email: value('#bm-email'),
         job: value('#bm-job'),
         periode: periodeSelect.value,
         startDate: startInput.value,
@@ -459,6 +465,8 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
             amount: result.amount,
             expiresAt: result.expiresAt,
             phone: tenant.phone || '',
+            email: tenant.email || '',
+            recipientName: tenant.name || '',
             message: `Halo Kak ${tenant.name}, berikut tagihan perpanjangan sewa Kamar ${tenant.roomNumber} Casa Ramire sebesar ${rupiah(quote.grandTotal)}. Pembayaran dapat dilakukan melalui link DOKU berikut.`,
           });
         } catch (error) {
@@ -514,6 +522,7 @@ export function openCheckinFlow(roomId) {
         <div class="rounded-2xl border border-line bg-cream/60 p-4 text-xs space-y-2">
           <div class="flex justify-between"><span class="text-stone-500">Nama</span><b class="text-stone-800">${esc(booking.name)}</b></div>
           <div class="flex justify-between"><span class="text-stone-500">WhatsApp</span><b class="text-stone-800">${esc(booking.phone)}</b></div>
+          <div class="flex justify-between"><span class="text-stone-500">Email</span><b class="text-stone-800">${esc(booking.email || '—')}</b></div>
           <div class="flex justify-between"><span class="text-stone-500">Periode</span><b class="text-stone-800">${formatDate(booking.startDate)} — ${formatDate(booking.endDate)}</b></div>
           <div class="flex justify-between"><span class="text-stone-500">Total sewa</span><b class="text-stone-800">${rupiah(booking.grandTotal)}</b></div>
           <div class="flex justify-between"><span class="text-stone-500">Deposit</span><b class="text-stone-800">${rupiah(booking.deposit)}</b></div>

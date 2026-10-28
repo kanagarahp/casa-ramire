@@ -31,6 +31,7 @@ export function pushBill(draft, payload) {
     roomId: room?.id ?? payload.roomId ?? null,
     tenantName: tenant?.name || payload.tenantName || 'Tanpa nama',
     phone: tenant?.phone || payload.phone || '',
+    email: tenant?.email || payload.email || '',
     roomNumber: room?.nomor || payload.roomNumber || '—',
     type: payload.type || 'Sewa',
     description: payload.description || '',
@@ -177,19 +178,52 @@ export function getManualInvoices() {
   return [...getState().manualInvoices].sort((a, b) => b.id - a.id);
 }
 
-export function createManualInvoice({ roomId, item, amount, dueDate }) {
+export function createManualInvoice({
+  mode = 'tenant',
+  tenantId = null,
+  roomId = null,
+  name = '',
+  email = '',
+  phone = '',
+  item,
+  amount,
+  dueDate,
+  date,
+}) {
   const state = getState();
-  const room = state.rooms.find((entry) => String(entry.id) === String(roomId));
-  if (!room) throw new Error('Kamar tidak ditemukan.');
   if (!String(item || '').trim()) throw new Error('Item layanan wajib diisi.');
   if (toNumber(amount) <= 0) throw new Error('Nominal invoice harus lebih dari 0.');
 
-  const tenant = room.tenantId
-    ? state.tenants.find((entry) => String(entry.id) === String(room.tenantId))
-    : null;
-  const booking = room.status === 'booking' ? room.booking : null;
-  const name = tenant?.name || booking?.name || 'Calon Tenant';
-  const phone = tenant?.phone || booking?.phone || '';
+  let tenant = null;
+  let room = null;
+  let invoiceName = '';
+  let invoiceEmail = '';
+  let invoicePhone = '';
+  let invoiceRoom = '—';
+
+  if (mode === 'tenant') {
+    tenant = state.tenants.find((entry) => String(entry.id) === String(tenantId)) || null;
+    if (!tenant) throw new Error('Penghuni tidak ditemukan.');
+    room =
+      state.rooms.find((entry) => String(entry.id) === String(tenant.roomId)) ||
+      (roomId
+        ? state.rooms.find((entry) => String(entry.id) === String(roomId))
+        : null) ||
+      null;
+    invoiceName = tenant.name;
+    invoiceEmail = tenant.email || '';
+    invoicePhone = tenant.phone || '';
+    invoiceRoom = room?.nomor || tenant.roomNumber || '—';
+  } else {
+    invoiceName = String(name || '').trim();
+    if (!invoiceName) throw new Error('Nama penerima invoice wajib diisi.');
+    room = roomId
+      ? state.rooms.find((entry) => String(entry.id) === String(roomId)) || null
+      : null;
+    invoiceEmail = String(email || '').trim();
+    invoicePhone = String(phone || '').trim();
+    invoiceRoom = room?.nomor || '—';
+  }
 
   let created;
   update((draft) => {
@@ -197,15 +231,17 @@ export function createManualInvoice({ roomId, item, amount, dueDate }) {
       id: nextId(draft.manualInvoices),
       number: documentNumber('SRV', draft.manualInvoices),
       tenantId: tenant?.id ?? null,
-      roomId: room.id,
-      tenantName: name,
-      phone,
-      roomNumber: room.nomor,
+      roomId: room?.id ?? null,
+      tenantName: invoiceName,
+      email: invoiceEmail,
+      phone: invoicePhone,
+      roomNumber: invoiceRoom,
+      mode: mode === 'tenant' ? 'tenant' : 'non-tenant',
       item: String(item).trim(),
       amount: Math.round(toNumber(amount)),
       paid: 0,
       status: 'unpaid',
-      dueDate: dueDate || addDays(todayISO(), 7),
+      dueDate: dueDate || date || addDays(todayISO(), 7),
       method: '',
       note: '',
       createdAt: new Date().toISOString(),

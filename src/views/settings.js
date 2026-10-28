@@ -102,9 +102,15 @@ export function openSettingsModal() {
                   <p class="hint mt-1">Dipakai untuk tombol "Chat Admin" di landing page.</p>
                 </div>
                 <div>
-                  <label class="label" for="set-address">Alamat / lokasi</label>
-                  <input id="set-address" type="text" class="input" value="${esc(settings.address || '')}" placeholder="cth: Jl. Melati No. 10" />
+                  <label class="label" for="set-email">Email properti</label>
+                  <input id="set-email" type="email" class="input" value="${esc(settings.email || '')}" placeholder="casaramirejogja@gmail.com" />
+                  <p class="hint mt-1">Tampil di landing page dan dipakai sebagai pengirim email tagihan.</p>
                 </div>
+              </div>
+
+              <div>
+                <label class="label" for="set-address">Alamat / lokasi</label>
+                <input id="set-address" type="text" class="input" value="${esc(settings.address || '')}" placeholder="cth: Jl. Melati No. 10" />
               </div>
 
               <div>
@@ -123,9 +129,17 @@ export function openSettingsModal() {
                 <p class="hint mt-1">Pisahkan dengan koma atau baris baru.</p>
               </div>
 
-              <div>
-                <label class="label" for="set-maps">Link Google Maps (opsional)</label>
-                <input id="set-maps" type="url" class="input" value="${esc(settings.mapsUrl || '')}" placeholder="https://maps.google.com/…" />
+              <div class="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="label" for="set-maps">Link Google Maps (opsional)</label>
+                  <input id="set-maps" type="url" class="input" value="${esc(settings.mapsUrl || '')}" placeholder="https://maps.google.com/…" />
+                  <p class="hint mt-1">Dipakai untuk tombol "Buka di Google Maps".</p>
+                </div>
+                <div>
+                  <label class="label" for="set-maps-embed">URL embed Google Maps</label>
+                  <input id="set-maps-embed" type="url" class="input" value="${esc(settings.mapsEmbedUrl || '')}" placeholder="https://maps.google.com/maps?q=…&output=embed" />
+                  <p class="hint mt-1">Titik peta yang tampil di landing page.</p>
+                </div>
               </div>
 
               <div class="rounded-xl border border-line bg-cream/60 p-3">
@@ -139,13 +153,14 @@ export function openSettingsModal() {
                 <button type="submit" class="btn-primary btn-sm">${icon('Save', 'w-4 h-4')} Simpan profil</button>
                 <button type="button" class="btn-gold btn-sm" data-action="publish-catalog">${icon('UploadCloud', 'w-4 h-4')} Publikasikan katalog</button>
                 <a href="#/home" class="btn-outline btn-sm" data-modal-close>${icon('ExternalLink', 'w-4 h-4')} Buka landing page</a>
+                <a href="#/gallery" class="btn-outline btn-sm" data-modal-close>${icon('Image', 'w-4 h-4')} Kelola galeri</a>
               </div>
               <p class="hint" data-published-at>
                 Terakhir dipublikasikan: ${settings.catalogPublishedAt ? formatDateTime(settings.catalogPublishedAt) : 'belum pernah'}.
               </p>
               <p class="hint">
-                Tips: unggah beberapa foto lalu klik Publikasikan. Foto yang sudah terbit otomatis dilepas dari penyimpanan
-                lokal agar kuota browser tetap lega.
+                Tips: tambahkan foto di menu <b>Galeri Landing</b>, lalu klik Publikasikan. Foto yang sudah terbit otomatis dilepas
+                dari penyimpanan lokal agar kuota browser tetap lega.
               </p>
             </form>
           `,
@@ -203,11 +218,13 @@ export function openSettingsModal() {
 
       const readCatalogForm = () => ({
         whatsapp: el.querySelector('#set-wa').value,
+        email: el.querySelector('#set-email').value,
         address: el.querySelector('#set-address').value,
         tagline: el.querySelector('#set-tagline').value,
         description: el.querySelector('#set-description').value,
         facilities: el.querySelector('#set-facilities').value,
         mapsUrl: el.querySelector('#set-maps').value,
+        mapsEmbedUrl: el.querySelector('#set-maps-embed').value,
         catalogAdminKey: el.querySelector('#set-catalog-key').value,
       });
 

@@ -42,6 +42,16 @@ function sanitizeForServer(state) {
     });
   }
 
+  if (Array.isArray(clone.gallery)) {
+    clone.gallery = clone.gallery.map((item) => {
+      const photo = String(item.photo || '');
+      return {
+        ...item,
+        photo: photo.startsWith('data:image/') ? '' : photo,
+      };
+    });
+  }
+
   return clone;
 }
 
@@ -51,6 +61,11 @@ function mergeServerState(serverState) {
     (local.rooms || [])
       .filter((room) => room.photo)
       .map((room) => [String(room.id), room.photo]),
+  );
+  const localGalleryPhotos = new Map(
+    (local.gallery || [])
+      .filter((item) => item.photo)
+      .map((item) => [String(item.id), item.photo]),
   );
 
   return {
@@ -64,6 +79,10 @@ function mergeServerState(serverState) {
     rooms: (serverState.rooms || []).map((room) => ({
       ...room,
       photo: localPhotos.get(String(room.id)) || '',
+    })),
+    gallery: (serverState.gallery || []).map((item) => ({
+      ...item,
+      photo: localGalleryPhotos.get(String(item.id)) || item.photo || '',
     })),
   };
 }

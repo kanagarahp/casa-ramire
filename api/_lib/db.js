@@ -107,6 +107,28 @@ export async function ensureCatalogSchema() {
         )
       `);
       await query(`
+        create table if not exists casa_promo_codes (
+          code text primary key,
+          max_uses integer not null default 0,
+          used_count integer not null default 0,
+          updated_at timestamptz not null default now()
+        )
+      `);
+      await query(`
+        create table if not exists casa_bookings (
+          id text primary key,
+          code text not null unique,
+          status text not null default 'pending',
+          data jsonb not null,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        )
+      `);
+      await query(`
+        create index if not exists casa_bookings_status_idx
+          on casa_bookings (status, created_at)
+      `);
+      await query(`
         create index if not exists casa_payments_status_idx
           on casa_payments (status)
       `);

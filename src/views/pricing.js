@@ -83,13 +83,13 @@ export function render(root) {
         <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-line">
           <div>
             <h2 class="font-extrabold text-stone-800 text-sm">Daftar Promo</h2>
-            <p class="text-xs text-stone-500 mt-0.5">Diskon rupiah dihitung per bulan kontrak.</p>
+            <p class="text-xs text-stone-500 mt-0.5">Diskon rupiah dihitung per bulan kontrak. Kode promo dipakai calon penghuni saat booking di landing page.</p>
           </div>
           <span class="badge-gold">${promos.filter((promo) => promo.active).length} aktif</span>
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Nama Promo</th><th>Tipe</th><th>Nilai Diskon</th><th>Status</th><th class="text-right">Aksi</th></tr></thead>
+            <thead><tr><th>Nama Promo</th><th>Kode</th><th>Tipe</th><th>Nilai Diskon</th><th>Kuota</th><th>Status</th><th class="text-right">Aksi</th></tr></thead>
             <tbody>
               ${
                 promos.length
@@ -98,8 +98,13 @@ export function render(root) {
                         (promo) => `
                         <tr>
                           <td class="font-bold text-stone-800">${esc(promo.name)}</td>
+                          <td><span class="font-mono text-[11px] font-extrabold text-brand bg-brand-50 border border-brand/20 rounded px-1.5 py-0.5">${esc(promo.code || '—')}</span></td>
                           <td>${promoTypeBadge(promo)}</td>
                           <td class="font-bold whitespace-nowrap">${promo.type === 'persen' ? `${toNumber(promo.value)}%` : `${rupiah(promo.value)} / bulan`}</td>
+                          <td class="whitespace-nowrap text-xs">
+                            ${Number(promo.maxUses) > 0 ? `<b>${toNumber(promo.usedCount)}</b> / ${toNumber(promo.maxUses)}` : `<b>${toNumber(promo.usedCount)}</b> / ∞`}
+                            <p class="text-[10px] text-stone-500">${Number(promo.maxUses) === 1 ? 'sekali pakai' : 'multi pakai'}</p>
+                          </td>
                           <td>${promo.active ? '<span class="badge-green">Aktif</span>' : '<span class="badge-gray">Nonaktif</span>'}</td>
                           <td>
                             <div class="flex items-center justify-end gap-1">
@@ -111,7 +116,7 @@ export function render(root) {
                         </tr>`,
                       )
                       .join('')
-                  : emptyRow(5, 'Belum ada promo. Tambahkan promo pertama Anda.')
+                  : emptyRow(7, 'Belum ada promo. Tambahkan promo pertama Anda.')
               }
             </tbody>
           </table>
@@ -193,6 +198,16 @@ function openPromoModal(promoId = null) {
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
+            <label class="label" for="pr-code">Kode promo</label>
+            <input id="pr-code" type="text" class="input font-mono uppercase" placeholder="cth: MAHASISWA5" maxlength="24" value="${esc(promo?.code || '')}" />
+          </div>
+          <div>
+            <label class="label" for="pr-max">Kuota pemakaian</label>
+            <input id="pr-max" type="number" min="0" step="1" class="input" placeholder="0 = tanpa batas" value="${promo ? toNumber(promo.maxUses) : 0}" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
             <label class="label" for="pr-type">Tipe diskon</label>
             <select id="pr-type" class="select">
               <option value="rupiah" ${promo?.type !== 'persen' ? 'selected' : ''}>Rupiah / bulan</option>
@@ -208,7 +223,7 @@ function openPromoModal(promoId = null) {
           <input id="pr-active" type="checkbox" class="w-4 h-4 accent-brand" ${promo ? (promo.active ? 'checked' : '') : 'checked'} />
           <span class="text-xs font-bold text-stone-700">Aktifkan promo ini</span>
         </label>
-        <p class="hint">Diskon rupiah berlaku per bulan sewa. Diskon persen dihitung dari total nilai sewa.</p>
+        <p class="hint">Kode promo hanya bisa dipakai calon penghuni saat booking dari landing page. Isi kuota <b>1</b> untuk sekali pakai, <b>0</b> untuk tanpa batas. Setelah promo diubah, klik <b>Publikasikan</b> di Pengaturan/Galeri agar kode terbaru aktif di landing page.</p>
       </form>
     `,
     footer: `
@@ -222,6 +237,8 @@ function openPromoModal(promoId = null) {
           savePromo({
             id: promo?.id || null,
             name: el.querySelector('#pr-name').value,
+            code: el.querySelector('#pr-code').value,
+            maxUses: toNumber(el.querySelector('#pr-max').value),
             type: el.querySelector('#pr-type').value,
             value: toNumber(el.querySelector('#pr-value').value),
             active: el.querySelector('#pr-active').checked,

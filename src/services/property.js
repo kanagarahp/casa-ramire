@@ -1,9 +1,9 @@
 import { PERIOD_KEYS } from '../core/constants.js';
-import { addDays, toNumber, todayISO } from '../core/format.js';
+import { addDays, daysBetween, toNumber, todayISO } from '../core/format.js';
 import { nextId } from '../core/id.js';
 import { getState, update } from '../core/store.js';
 import { pushBill } from './billing.js';
-import { computeQuote } from './pricing.js';
+import { carAddon, computeQuote, hasCarAddon } from './pricing.js';
 
 function must(condition, message) {
   if (!condition) throw new Error(message);
@@ -120,10 +120,12 @@ export function deleteRoom(id) {
 function validateGuest(data) {
   const name = String(data.name || '').trim();
   const phone = String(data.phone || '').trim();
+  const email = String(data.email || '').trim();
   must(name.length >= 2, 'Nama penghuni wajib diisi.');
   must(phone.length >= 8, 'Nomor WhatsApp wajib diisi dengan benar.');
+  if (email) must(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), 'Format email tidak valid.');
   must(PERIOD_KEYS.includes(String(data.periode)), 'Skema periode tidak valid.');
-  return { name, phone };
+  return { name, phone, email };
 }
 
 function normalizeAddons(addons) {
@@ -134,6 +136,13 @@ function normalizeAddons(addons) {
       name: String(addon.name),
       price: Math.max(0, Math.round(toNumber(addon.price))),
     }));
+}
+
+/** Add the fixed car-parking surcharge when the guest brings a car. */
+function effectiveAddons(data) {
+  const addons = normalizeAddons(data.addons);
+  if (data.car && !hasCarAddon(addons)) addons.push(carAddon());
+  return addons;
 }
 
 function promoSnapshot(quote) {
@@ -169,7 +178,7 @@ export function saveBooking(roomId, payload) {
   must(room.status !== 'terisi', 'Kamar sedang dihuni. Gunakan perpanjangan atau pindah kamar.');
 
   const guest = validateGuest(payload);
-  const addons = normalizeAddons(payload.addons);
+  const addons = effectiveAddons(payload);
   const quote = buildQuoteFor(room, { ...payload, addons });
 
   update((draft) => {
@@ -179,6 +188,7 @@ export function saveBooking(roomId, payload) {
     target.booking = {
       name: guest.name,
       phone: guest.phone,
+      email: guest.email,
       job: String(payload.job || '').trim(),
       notes: String(payload.notes || '').trim(),
       emergencyContact: {
@@ -247,6 +257,7 @@ function createTenant(draft, room, data, quote, rentPaid) {
     id: nextId(draft.tenants),
     name: data.name,
     phone: data.phone,
+    email: data.email || '',
     job: data.job || '',
     notes: data.notes || '',
     emergencyContact: data.emergencyContact || { name: '', relation: '', phone: '' },
@@ -334,7 +345,7 @@ export function checkInDirect(roomId, payload) {
   must(room.status === 'kosong', 'Kamar ini tidak kosong. Muat ulang data.');
 
   const guest = validateGuest(payload);
-  const addons = normalizeAddons(payload.addons);
+  const addons = effectiveAddons(payload);
   const quote = buildQuoteFor(room, { ...payload, addons });
   const rentPaid = quote.payOption === 'full' ? quote.grandTotal : 0;
 
@@ -403,6 +414,7 @@ export function checkInFromBooking(roomId, { settle = true } = {}) {
       {
         name: booking.name,
         phone: booking.phone,
+        email: booking.email || '',
         job: booking.job,
         notes: booking.notes,
         emergencyContact: booking.emergencyContact,
@@ -570,6 +582,7 @@ export function updateTenant(tenantId, patch) {
     const target = draft.tenants.find((item) => String(item.id) === String(tenantId));
     target.name = name;
     if (patch.phone !== undefined) target.phone = String(patch.phone).trim();
+    if (patch.email !== undefined) target.email = String(patch.email).trim();
     if (patch.job !== undefined) target.job = String(patch.job).trim();
     if (patch.notes !== undefined) target.notes = String(patch.notes).trim();
     if (patch.emergencyContact !== undefined) {
@@ -614,6 +627,35 @@ export function getOutstandingForTenant(tenantId) {
 
 export function getBookingRoomOfTenant(tenant) {
   return tenant?.roomId ? getRoom(tenant.roomId) : null;
+}
+
+/** Days lived at Casa Ramire, counted from the check-in date. */
+export function tenantStayDays(tenant) {
+  const start = tenant?.checkinDate || tenant?.startDate;
+  if (!start) return 0;
+  const end =
+    tenant?.status === 'aktif'
+      ? todayISO()
+      : tenant?.checkoutDate || tenant?.endDate || todayISO();
+  return Math.max(0, daysBetween(start, end));
+}
+
+/** Human-friendly stay duration, e.g. "8 bulan" or "1 thn 2 bln". */
+export function tenantStayLabel(tenant) {
+  const days = tenantStayDays(tenant);
+  if (days < 1) {
+    const start = tenant?.checkinDate || tenant?.startDate;
+    return start && start > todayISO() ? 'Belum mulai' : 'Baru check-in';
+  }
+  if (days < 31) return `${days} hari`;
+  const months = Math.floor(days / 30);
+  if (months < 12) {
+    const rest = days % 30;
+    return rest ? `${months} bln ${rest} hr` : `${months} bulan`;
+  }
+  const years = Math.floor(months / 12);
+  const restMonths = months % 12;
+  return restMonths ? `${years} thn ${restMonths} bln` : `${years} tahun`;
 }
 
 /** Mark a tenant as waiting for a DOKU renewal payment. */

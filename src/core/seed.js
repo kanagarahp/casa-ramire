@@ -52,6 +52,7 @@ export function buildSeedState() {
       createdAt: now,
     })),
     rooms: generateRooms(),
+    gallery: [],
     tenants: [],
     bills: [],
     manualInvoices: [],

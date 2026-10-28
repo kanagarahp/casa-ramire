@@ -6,7 +6,9 @@ const TEXT_FIELDS = [
   'description',
   'address',
   'whatsapp',
+  'email',
   'mapsUrl',
+  'mapsEmbedUrl',
   'facilities',
   'catalogAdminKey',
 ];

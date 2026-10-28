@@ -1,4 +1,4 @@
-import { ensureCatalogSchema, query } from './_lib/db.js';
+import { ensureCatalogSchema, query, withTransaction } from './_lib/db.js';
 import { methodNotAllowed, readBody, requireAdmin, sendJson } from './_lib/http.js';
 
 const CATALOG_ID = 'public';
@@ -37,6 +37,32 @@ export default async function handler(req, res) {
 
       const row = result.rows[0];
       const catalog = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+
+      // Promo remaining quota lives in its own ledger because public bookings
+      // update it between catalog publications.
+      if (Array.isArray(catalog?.promos) && catalog.promos.length) {
+        try {
+          const promoRows = await query(
+            'select code, max_uses, used_count from casa_promo_codes',
+          );
+          const byCode = new Map(
+            promoRows.rows.map((promo) => [String(promo.code).toUpperCase(), promo]),
+          );
+          catalog.promos = catalog.promos.map((promo) => {
+            const live = byCode.get(String(promo.code || '').toUpperCase());
+            return live
+              ? {
+                  ...promo,
+                  maxUses: Number(live.max_uses) || 0,
+                  usedCount: Number(live.used_count) || 0,
+                }
+              : promo;
+          });
+        } catch (error) {
+          console.error('[catalog] gagal membaca kuota promo', error);
+        }
+      }
+
       return sendJson(res, 200, {
         published: true,
         updatedAt: row.updated_at,
@@ -80,9 +106,56 @@ export default async function handler(req, res) {
         [CATALOG_ID, serialized],
       );
 
+      // Keep the public promo-code ledger in sync. `used_count` is preserved
+      // across publications so one-time codes stay redeemed.
+      let promoUsage = [];
+      if (Array.isArray(catalog.promos)) {
+        try {
+          await withTransaction(async (client) => {
+            const codes = [];
+            for (const promo of catalog.promos) {
+              const code = String(promo?.code || '')
+                .toUpperCase()
+                .replace(/[^A-Z0-9-]/g, '')
+                .slice(0, 24);
+              if (!code) continue;
+              codes.push(code);
+              await client.query(
+                `insert into casa_promo_codes (code, max_uses, used_count, updated_at)
+                 values ($1, $2, 0, now())
+                 on conflict (code) do update
+                 set max_uses = excluded.max_uses, updated_at = now()`,
+                [code, Math.max(0, Number(promo.maxUses) || 0)],
+              );
+            }
+
+            if (codes.length) {
+              await client.query(
+                'delete from casa_promo_codes where not (code = any($1::text[]))',
+                [codes],
+              );
+            } else {
+              await client.query('delete from casa_promo_codes');
+            }
+          });
+
+          const livePromos = await query(
+            'select code, max_uses, used_count from casa_promo_codes order by code',
+          );
+          promoUsage = livePromos.rows.map((promo) => ({
+            code: promo.code,
+            maxUses: Number(promo.max_uses) || 0,
+            usedCount: Number(promo.used_count) || 0,
+          }));
+        } catch (error) {
+          console.error('[catalog] gagal menyinkronkan kode promo', error);
+        }
+      }
+
       return sendJson(res, 200, {
         ok: true,
         updatedAt: result.rows[0]?.updated_at || new Date().toISOString(),
+        promos: promoUsage,
       });
     } catch (error) {
       console.error('[catalog] gagal menyimpan katalog', error);

@@ -110,6 +110,7 @@ export async function createDokuCheckout({
   invoiceNumber,
   amount,
   customerName,
+  customerEmail,
   description,
   origin,
 }) {
@@ -125,6 +126,11 @@ export async function createDokuCheckout({
   if (!baseOrigin) throw new Error('APP_URL belum dikonfigurasi.');
 
   const customer = normalizeCustomerName(customerName);
+  const email = String(customerEmail || '').trim();
+  const customerPayload = {
+    ...(customer ? { name: customer } : {}),
+    ...(email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? { email } : {}),
+  };
   const additionalInfo = {
     override_notification_url: `${baseOrigin}/api/payments/doku/notification`,
   };
@@ -142,7 +148,7 @@ export async function createDokuCheckout({
       payment_due_date: dueMinutes,
       payment_method_types: getPaymentChannels(),
     },
-    ...(customer ? { customer: { name: customer } } : {}),
+    ...(Object.keys(customerPayload).length ? { customer: customerPayload } : {}),
     additional_info: additionalInfo,
   };
 

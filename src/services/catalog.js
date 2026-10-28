@@ -1,6 +1,6 @@
 import { getState, update } from '../core/store.js';
 import { getFacilities } from './settings.js';
-import { getRate } from './pricing.js';
+import { getRate, syncPromoUsage } from './pricing.js';
 
 const STATUS_LABEL = {
   kosong: 'Tersedia',
@@ -21,9 +21,13 @@ function sortedRooms(rooms) {
 export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
   const state = getState();
   const settings = state.settings || {};
+  const rooms = sortedRooms(safeArray(state.rooms));
+  const available = rooms.filter((room) => room.status === 'kosong').length;
+  const occupied = rooms.filter((room) => room.status === 'terisi').length;
+  const booked = rooms.filter((room) => room.status === 'booking').length;
 
   return {
-    version: 1,
+    version: 2,
     generatedAt: new Date().toISOString(),
     property: {
       name: String(settings.propertyName || 'Casa Ramire').trim(),
@@ -31,7 +35,9 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
       description: String(settings.description || '').trim(),
       address: String(settings.address || '').trim(),
       whatsapp: String(settings.whatsapp || '').trim(),
+      email: String(settings.email || '').trim(),
       mapsUrl: String(settings.mapsUrl || '').trim(),
+      mapsEmbedUrl: String(settings.mapsEmbedUrl || '').trim(),
       facilities: getFacilities(),
       deposit: Number(settings.depositDefault) || 500000,
     },
@@ -39,15 +45,33 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
       lantai2: { ...(state.pricing?.lantai2 || {}) },
       lantai3: { ...(state.pricing?.lantai3 || {}) },
     },
-    rooms: sortedRooms(safeArray(state.rooms)).map((room) => ({
+    availability: {
+      total: rooms.length,
+      available,
+      occupied,
+      booked,
+    },
+    gallery: safeArray(state.gallery).map((item) => ({
+      id: item.id,
+      caption: String(item.caption || '').trim(),
+      url: includeLocalPhotos ? item.photo || item.photoUrl || '' : item.photoUrl || '',
+    })),
+    promos: safeArray(state.promos)
+      .filter((promo) => promo.active && promo.code)
+      .map((promo) => ({
+        code: String(promo.code || '').toUpperCase(),
+        name: String(promo.name || ''),
+        type: promo.type === 'persen' ? 'persen' : 'rupiah',
+        value: Number(promo.value) || 0,
+        maxUses: Math.max(0, Number(promo.maxUses) || 0),
+        usedCount: Math.max(0, Number(promo.usedCount) || 0),
+      })),
+    rooms: rooms.map((room) => ({
       id: room.id,
       nomor: room.nomor,
       lantai: room.lantai,
       status: room.status,
       statusLabel: STATUS_LABEL[room.status] || 'Tersedia',
-      photo: includeLocalPhotos
-        ? room.photo || room.photoUrl || ''
-        : room.photoUrl || '',
       priceMonthly: getRate(room.lantai, '1'),
     })),
   };
@@ -88,32 +112,57 @@ export async function publishCatalog({ adminKey, onProgress } = {}) {
   }
 
   const state = getState();
-  const pending = state.rooms.filter(
-    (room) => typeof room.photo === 'string' && room.photo.startsWith('data:image/'),
-  );
+  const pending = [
+    ...state.rooms
+      .filter((room) => typeof room.photo === 'string' && room.photo.startsWith('data:image/'))
+      .map((room) => ({
+        kind: 'room',
+        id: room.id,
+        photo: room.photo,
+        label: `Mengunggah foto kamar ${room.nomor}…`,
+      })),
+    ...(state.gallery || [])
+      .filter((item) => typeof item.photo === 'string' && item.photo.startsWith('data:image/'))
+      .map((item, index) => ({
+        kind: 'gallery',
+        id: item.id,
+        photo: item.photo,
+        label: `Mengunggah foto galeri ${index + 1}…`,
+      })),
+  ];
 
   const uploaded = [];
   let index = 0;
 
-  for (const room of pending) {
+  for (const item of pending) {
     index += 1;
     onProgress?.({
       current: index,
       total: pending.length,
-      label: `Mengunggah foto kamar ${room.nomor}…`,
+      label: item.label,
     });
-    const url = await uploadCatalogPhoto(key, room.photo);
-    uploaded.push({ roomId: room.id, url });
+    const url = await uploadCatalogPhoto(key, item.photo);
+    uploaded.push({ ...item, url });
   }
 
   if (uploaded.length) {
     update((draft) => {
       for (const item of uploaded) {
-        const room = draft.rooms.find((entry) => String(entry.id) === String(item.roomId));
+        if (item.kind === 'gallery') {
+          const entry = (draft.gallery || []).find(
+            (photo) => String(photo.id) === String(item.id),
+          );
+          if (entry) {
+            entry.photoUrl = item.url;
+            // Keep the browser quota healthy: the public URL is now the
+            // single source of truth for published gallery photos.
+            entry.photo = '';
+          }
+          continue;
+        }
+        const room = draft.rooms.find((entry) => String(entry.id) === String(item.id));
         if (room) {
           room.photoUrl = item.url;
-          // The public URL is now the single source of truth. Keeping the
-          // base64 copy would quickly fill the browser storage quota.
           room.photo = '';
         }
       }
@@ -144,6 +193,9 @@ export async function publishCatalog({ adminKey, onProgress } = {}) {
   }
 
   const updatedAt = payload.updatedAt || new Date().toISOString();
+  if (Array.isArray(payload.promos) && payload.promos.length) {
+    syncPromoUsage(payload.promos);
+  }
   update((draft) => {
     draft.settings = draft.settings || {};
     draft.settings.catalogPublishedAt = updatedAt;
@@ -168,4 +220,28 @@ export async function fetchPublishedCatalog() {
   const payload = await response.json();
   if (!payload?.published || !payload.catalog) return null;
   return payload.catalog;
+}
+
+/**
+ * Live room counts from the shared state, independent of the published
+ * catalog snapshot. Returns null when the API is unavailable.
+ */
+export async function fetchLiveAvailability() {
+  try {
+    const response = await fetch('/api/availability', {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || !contentType.includes('application/json')) return null;
+
+    const payload = await response.json().catch(() => null);
+    if (!payload?.exists || !payload.availability) return null;
+    return {
+      availability: payload.availability,
+      rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
+    };
+  } catch {
+    return null;
+  }
 }

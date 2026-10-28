@@ -67,6 +67,7 @@ export default async function handler(req, res) {
 
   let amount = 0;
   let customerName = '';
+  let customerEmail = '';
   let description = '';
   let recordId = null;
   let tenantId = null;
@@ -82,6 +83,7 @@ export default async function handler(req, res) {
 
     amount = Math.max(0, Number(bill.amount) - Number(bill.paid || 0));
     customerName = bill.tenantName || '';
+    customerEmail = bill.email || findById(state.tenants, bill.tenantId)?.email || '';
     description = `${bill.type || 'Tagihan'} Kamar ${bill.roomNumber || '—'}`;
     tenantId = bill.tenantId || null;
     payload = { kind, recordId: bill.id, billId: bill.id };
@@ -97,6 +99,7 @@ export default async function handler(req, res) {
 
     amount = Math.max(0, Number(invoice.amount) - Number(invoice.paid || 0));
     customerName = invoice.tenantName || '';
+    customerEmail = invoice.email || findById(state.tenants, invoice.tenantId)?.email || '';
     description = `${invoice.item || 'Invoice'} Kamar ${invoice.roomNumber || '—'}`;
     tenantId = invoice.tenantId || null;
     payload = { kind, recordId: invoice.id, invoiceId: invoice.id };
@@ -115,6 +118,7 @@ export default async function handler(req, res) {
 
     amount = Number(renewal.grandTotal) || 0;
     customerName = tenant.name || '';
+    customerEmail = tenant.email || '';
     description = `Perpanjangan sewa Kamar ${tenant.roomNumber || '—'} - ${periodLabel(renewal)}`;
     recordId = tenant.id;
     tenantId = tenant.id;
@@ -156,6 +160,7 @@ export default async function handler(req, res) {
       invoiceNumber: id,
       amount,
       customerName,
+      customerEmail,
       description,
       origin,
     });

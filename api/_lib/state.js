@@ -50,6 +50,16 @@ export function sanitizeStateForServer(state) {
     });
   }
 
+  if (Array.isArray(clean.gallery)) {
+    clean.gallery = clean.gallery.map((item) => {
+      const photo = String(item.photo || '');
+      return {
+        ...item,
+        photo: photo.startsWith('data:image/') ? '' : photo,
+      };
+    });
+  }
+
   return clean;
 }
 
@@ -186,6 +196,7 @@ export function applyPaymentToState(state, payment, { channel = '', paidAt = new
       roomId: tenant.roomId,
       tenantName: tenant.name,
       phone: tenant.phone || '',
+      email: tenant.email || '',
       roomNumber: tenant.roomNumber || '—',
       type: 'Perpanjangan',
       description: `${periodLabel(renewal)} • ${renewal.startDate} s/d ${renewal.endDate}`,

@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION, STORAGE_KEY } from './constants.js';
+import { CAR_FEE, SCHEMA_VERSION, STORAGE_KEY } from './constants.js';
 import { buildSeedState } from './seed.js';
 import { storage } from './storage.js';
 
@@ -22,6 +22,7 @@ function migrate(stored) {
   for (const key of [
     'users',
     'rooms',
+    'gallery',
     'tenants',
     'bills',
     'manualInvoices',
@@ -39,6 +40,52 @@ function migrate(stored) {
     photoUrl: '',
     ...room,
   }));
+
+  // v5: landing-page gallery replaces the per-room catalog.
+  merged.gallery = merged.gallery.map((item, index) => ({
+    id: item.id ?? index + 1,
+    caption: '',
+    photo: '',
+    photoUrl: '',
+    createdAt: '',
+    ...item,
+  }));
+
+  // v5: contact email + Google Maps embed for the landing page.
+  if (storedVersion < 5) {
+    if (!merged.settings.email) merged.settings.email = base.settings.email;
+    if (!merged.settings.mapsUrl) merged.settings.mapsUrl = base.settings.mapsUrl;
+    if (!merged.settings.mapsEmbedUrl) {
+      merged.settings.mapsEmbedUrl = base.settings.mapsEmbedUrl;
+    }
+  }
+
+  // v5: promo codes are redeemable on the landing page. Old promos receive a
+  // deterministic code and unlimited quota so nothing breaks.
+  merged.promos = merged.promos.map((promo, index) => {
+    const fallbackCode = `PROMO${promo.id ?? index + 1}`;
+    return {
+      ...promo,
+      code: String(promo.code || fallbackCode).toUpperCase().replace(/[^A-Z0-9-]/g, ''),
+      maxUses: Math.max(0, Number(promo.maxUses) || 0),
+      usedCount: Math.max(0, Number(promo.usedCount) || 0),
+    };
+  });
+
+  // v5: align the parking add-on with the landing-page car surcharge.
+  if (storedVersion < 5) {
+    merged.addons = merged.addons.map((addon) =>
+      /parkir/i.test(String(addon.name || ''))
+        ? { ...addon, name: 'Parkir Mobil', price: CAR_FEE }
+        : addon,
+    );
+  }
+
+  // v5: tenants and active bookings store an email address for billing.
+  merged.tenants = merged.tenants.map((tenant) => ({ email: '', ...tenant }));
+  merged.rooms = merged.rooms.map((room) =>
+    room.booking ? { ...room, booking: { email: '', ...room.booking } } : room,
+  );
 
   // Keep the public WhatsApp number filled for saves created before the
   // landing page existed (empty string would otherwise override the default).

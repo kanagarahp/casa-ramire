@@ -5,7 +5,7 @@ import {
   todayISO,
   waLink,
 } from '../core/format.js';
-import { getOutstandingForTenant, getTenants } from '../services/property.js';
+import { getOutstandingForTenant, getTenants, tenantStayLabel } from '../services/property.js';
 import { buildMessage } from '../services/templates.js';
 import {
   avatar,
@@ -54,8 +54,16 @@ function rowHtml(tenant) {
         <div class="flex items-center gap-2.5">
           ${avatar(tenant.name, 'w-9 h-9 text-[10px]')}
           <div class="min-w-0">
-            <button type="button" class="font-bold text-stone-800 hover:text-brand hover:underline text-left" data-action="detail" data-id="${tenant.id}">${esc(tenant.name)}</button>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button type="button" class="font-bold text-stone-800 hover:text-brand hover:underline text-left" data-action="detail" data-id="${tenant.id}">${esc(tenant.name)}</button>
+              ${
+                tenant.checkinDate
+                  ? `<span class="badge-gold" title="Lama tinggal sejak ${formatDate(tenant.checkinDate)}">${esc(tenantStayLabel(tenant))}</span>`
+                  : ''
+              }
+            </div>
             <p class="text-[10px] text-stone-600 truncate">${esc(tenant.job || '—')} · ${esc(tenant.phone)}</p>
+            ${tenant.email ? `<p class="text-[10px] text-stone-500 truncate">${esc(tenant.email)}</p>` : ''}
           </div>
         </div>
       </td>
