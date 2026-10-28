@@ -175,6 +175,12 @@ npm test         # unit test (node:test)
 npm run deploy   # terbitkan dist/ ke branch gh-pages
 ```
 
+Catatan: `npm run dev` hanya menjalankan frontend Vite. Endpoint `/api/*`
+(katalog, state, pembayaran DOKU) hanya tersedia di production atau saat
+menjalankan `vercel dev`. Di mode Vite murni, halaman katalog otomatis memakai
+data lokal/seed dan tombol publikasi/pembayaran akan menampilkan pesan bahwa API
+belum tersedia.
+
 ## Struktur proyek
 
 ```

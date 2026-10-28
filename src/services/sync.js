@@ -138,7 +138,8 @@ async function pull() {
       cache: 'no-store',
     });
 
-    if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || !contentType.includes('application/json')) {
       if (response.status === 401 && !authWarned) {
         authWarned = true;
         toast('Kunci admin tidak valid. Periksa Pengaturan.', 'error');
@@ -212,6 +213,12 @@ async function push({ initial = false } = {}) {
         baseVersion: version,
       }),
     });
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.warn('[sync] API state tidak tersedia. Gunakan production atau `vercel dev`.');
+      return;
+    }
 
     const payload = await response.json().catch(() => ({}));
 

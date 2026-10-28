@@ -34,6 +34,13 @@ async function postPaymentLink(payload) {
     body: JSON.stringify(payload),
   });
 
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(
+      'API pembayaran DOKU tidak tersedia. Gunakan production atau jalankan `vercel dev`.',
+    );
+  }
+
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = String(result.error || 'Gagal membuat link pembayaran DOKU.');

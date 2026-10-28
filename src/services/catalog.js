@@ -63,9 +63,15 @@ async function uploadCatalogPhoto(adminKey, dataUrl) {
     body: JSON.stringify({ dataUrl }),
   });
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload.url) {
-    throw new Error(payload.error || 'Gagal mengunggah foto katalog.');
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json')
+    ? await response.json().catch(() => ({}))
+    : {};
+  if (!response.ok || !contentType.includes('application/json') || !payload.url) {
+    throw new Error(
+      payload.error ||
+        'Gagal mengunggah foto katalog. Pastikan API berjalan di production atau `vercel dev`.',
+    );
   }
 
   return payload.url;
@@ -126,9 +132,15 @@ export async function publishCatalog({ adminKey, onProgress } = {}) {
     body: JSON.stringify({ catalog }),
   });
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || 'Gagal mempublikasikan katalog.');
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json')
+    ? await response.json().catch(() => ({}))
+    : {};
+  if (!response.ok || !contentType.includes('application/json')) {
+    throw new Error(
+      payload.error ||
+        'Gagal mempublikasikan katalog. Pastikan API berjalan di production atau `vercel dev`.',
+    );
   }
 
   const updatedAt = payload.updatedAt || new Date().toISOString();
@@ -146,8 +158,11 @@ export async function fetchPublishedCatalog() {
     cache: 'no-store',
   });
 
-  if (!response.ok) {
-    throw new Error('Katalog publik belum dapat dimuat.');
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok || !contentType.includes('application/json')) {
+    // `vite dev` does not run the serverless functions. Fall back to local
+    // data instead of trying to parse an HTML/module response as JSON.
+    return null;
   }
 
   const payload = await response.json();
