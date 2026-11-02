@@ -164,8 +164,23 @@ function buildQuoteFor(room, payload) {
     addons: payload.addons || [],
     depositEnabled: Boolean(payload.depositEnabled),
     depositValue: payload.depositValue,
+    depositPaid: payload.depositPaidNow !== false,
     payOption: payload.payOption === 'full' ? 'full' : 'partial',
   });
+}
+
+function depositHistoryEntry(amount, { date = todayISO(), method = 'Tunai / Cash', note = '' } = {}) {
+  const value = Math.max(0, Math.round(toNumber(amount)));
+  if (!value) return null;
+  return {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    type: 'in',
+    amount: value,
+    date,
+    method,
+    note,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -207,6 +222,16 @@ export function saveBooking(roomId, payload) {
       addonTotal: quote.addonTotal,
       grandTotal: quote.grandTotal,
       deposit: quote.deposit,
+      depositPaid: quote.depositPaidAmount,
+      depositRefunded: 0,
+      depositHistory: quote.depositPaidAmount
+        ? [
+            depositHistoryEntry(quote.depositPaidAmount, {
+              note: 'Deposit booking',
+              date: todayISO(),
+            }),
+          ].filter(Boolean)
+        : [],
       payOption: quote.payOption,
       payNow: quote.payNow,
       remaining: quote.remaining,
@@ -251,8 +276,12 @@ function addPayment(tenant, draft, { amount, type, method = 'Tunai / Cash', note
   });
 }
 
-function createTenant(draft, room, data, quote, rentPaid) {
+function createTenant(draft, room, data, quote, rentPaid, depositPaidAmount = quote.deposit) {
   const now = new Date().toISOString();
+  const paidDeposit = Math.max(0, Math.round(toNumber(depositPaidAmount)));
+  const inheritedDepositHistory = Array.isArray(data.depositHistory)
+    ? data.depositHistory
+    : [];
   const tenant = {
     id: nextId(draft.tenants),
     name: data.name,
@@ -276,7 +305,18 @@ function createTenant(draft, room, data, quote, rentPaid) {
     contractTotal: quote.grandTotal,
     monthlyCharge: quote.monthlyCharge,
     deposit: quote.deposit,
-    depositPaid: quote.deposit,
+    depositPaid: paidDeposit,
+    depositRefunded: 0,
+    depositHistory: inheritedDepositHistory.length
+      ? inheritedDepositHistory
+      : paidDeposit
+        ? [
+            depositHistoryEntry(paidDeposit, {
+              note: 'Deposit check-in',
+              date: quote.startDate,
+            }),
+          ].filter(Boolean)
+        : [],
     totalPaid: Math.max(0, Math.round(toNumber(rentPaid))),
     status: 'aktif',
     checkinDate: quote.startDate,
@@ -314,9 +354,9 @@ function createTenant(draft, room, data, quote, rentPaid) {
         })
       : null;
 
-  if (quote.deposit > 0) {
+  if (paidDeposit > 0) {
     addPayment(tenant, draft, {
-      amount: quote.deposit,
+      amount: paidDeposit,
       type: 'Deposit',
       note: 'Deposit check-in',
       date: quote.startDate,
@@ -364,6 +404,7 @@ export function checkInDirect(roomId, payload) {
       },
       quote,
       rentPaid,
+      quote.depositPaidAmount,
     );
   });
 
@@ -419,9 +460,11 @@ export function checkInFromBooking(roomId, { settle = true } = {}) {
         notes: booking.notes,
         emergencyContact: booking.emergencyContact,
         addons: booking.addons,
+        depositHistory: booking.depositHistory || [],
       },
       quote,
       rentPaid,
+      toNumber(booking.depositPaid),
     );
   });
 

@@ -23,7 +23,7 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 | **Pricelist & Promo** | Tarif harian/mingguan/1/3/6/12 bulan per lantai, promo rupiah/persen, **kode promo sekali/multi pakai** |
 | **Add-On** | Layanan tambahan bulanan (parkir, kulkas, dispenser, dll.) |
 | **Penghuni** | Direktori, biodata + email, kontak darurat, **lama tinggal sejak check-in**, riwayat kamar/pindah, riwayat pembayaran + pembayaran terakhir, tunggakan |
-| **Financial** | Jurnal pengeluaran + kategori, invoice layanan untuk **tenant/non-tenant**, pendapatan POS, pendapatan accrual, laba rugi |
+| **Financial** | **Buku kas** semua transaksi, **deposit/jaminan**, jurnal pengeluaran + kategori, invoice layanan untuk **tenant/non-tenant**, pendapatan POS, pendapatan accrual, laba rugi |
 | **Sewa & Kas** | Daftar tagihan, filter status, verifikasi/batal verifikasi pembayaran, pengingat WhatsApp, **kirim tagihan ke email penghuni** |
 | **Pembayaran DOKU** | Opsional dan nonaktif secara default. Jika diaktifkan: link QRIS/VA/e-wallet per tagihan/invoice/perpanjangan, status lunas otomatis lewat webhook |
 | **Email Tagihan** | Kirim rincian tagihan/invoice ke email penghuni melalui Resend tanpa perlu link DOKU, dengan fallback ke aplikasi email perangkat |
@@ -34,12 +34,32 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 
 ### Aturan pembukuan
 
-- **Deposit** dicatat sebagai kewajiban (bukan pendapatan).
+- **Deposit** adalah uang jaminan, **bukan DP sewa** dan **bukan pendapatan**.
+  Uang masuk dicatat sebagai kas sekaligus kewajiban, lalu dikembalikan saat
+  check-out sesuai ketentuan.
 - **Pendapatan sewa** diakui sebesar biaya bulanan kontrak (*accrual*).
 - Pembayaran sewa di atas biaya bulanan dicatat sebagai **pendapatan dimuka**.
 - Diskon rupiah dihitung per bulan kontrak; diskon persen dihitung dari total sewa.
 - Add-on dihitung per bulan dan masuk ke biaya bulanan penghuni.
 - Tagihan yang sudah diverifikasi dapat dibatalkan; saldo penghuni ikut disesuaikan.
+
+### Buku kas & deposit
+
+Buka **Financial & Keuangan → Buku Kas** untuk melihat seluruh transaksi:
+deposit masuk, refund deposit, pembayaran sewa, laundry/POS, invoice layanan,
+dan pengeluaran. Saldo berjalan dihitung otomatis, dan kartu **Deposit Ditahan**
+menunjukkan kewajiban deposit yang belum dikembalikan.
+
+Buka tab **Deposit & Jaminan** untuk melihat status deposit per kamar:
+target, sudah diterima, sudah dikembalikan, sisa, dan status lunas/belum.
+Owner dapat:
+
+- mencatat atau menyesuaikan deposit per penghuni/booking,
+- mengembalikan deposit (sebagian/penuh),
+- mengimpor status deposit dari salinan spreadsheet berdasarkan nomor kamar.
+
+Deposit yang belum dibayar tetap tampil sebagai kekurangan dan bisa ditagihkan
+menyusul, terpisah atau bersama perpanjangan sewa.
 
 ## Landing page, galeri & booking online
 

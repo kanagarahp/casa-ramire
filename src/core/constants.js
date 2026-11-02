@@ -6,7 +6,7 @@
 export const APP_NAME = 'Casa Ramire';
 export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /** Flat monthly surcharge for tenants who bring a car. */
 export const CAR_FEE = 130000;

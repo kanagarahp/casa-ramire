@@ -22,9 +22,12 @@ import {
   updateExpense,
 } from '../services/expenses.js';
 import { getAccrualReport, getProfitLoss } from '../services/reports.js';
+import { getDepositAccounts, getDepositSummary } from '../services/deposit.js';
+import { getLedgerCategories, getLedgerEntries, getLedgerSummary } from '../services/ledger.js';
 import { sendInvoiceByEmail } from '../services/billing-notify.js';
 import { createInvoicePaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { isDokuEnabled } from '../services/settings.js';
+import { isOwner } from '../services/auth.js';
 import { buildMessage } from '../services/templates.js';
 import {
   billBadge,
@@ -40,8 +43,15 @@ import { icon } from '../ui/icons.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { openManualInvoiceModal, openVerifyModal } from './billing-modals.js';
+import {
+  openDepositAdjustModal,
+  openDepositImportModal,
+  openDepositRefundModal,
+} from './deposit-modals.js';
 
-let activeTab = 'expenses';
+let activeTab = 'ledger';
+let ledgerCategory = '';
+let ledgerSearch = '';
 
 function invoiceEmail(invoice) {
   return String(
@@ -54,6 +64,8 @@ function invoiceEmail(invoice) {
 
 const TABS = [
   { id: 'expenses', label: 'Jurnal Pengeluaran', iconName: 'ScrollText' },
+  { id: 'ledger', label: 'Buku Kas', iconName: 'Wallet' },
+  { id: 'deposits', label: 'Deposit & Jaminan', iconName: 'Landmark' },
   { id: 'invoices', label: 'Invoice Manual', iconName: 'FileText' },
   { id: 'accrual', label: 'Pendapatan Accrual', iconName: 'TrendingUp' },
   { id: 'pnl', label: 'Laba Rugi', iconName: 'PieChart' },
@@ -323,7 +335,174 @@ function pnlSection() {
   `;
 }
 
+function ledgerSection() {
+  const summary = getLedgerSummary();
+  const entries = getLedgerEntries({ category: ledgerCategory, search: ledgerSearch });
+  const categories = getLedgerCategories();
+
+  return `
+    <div class="space-y-5">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        ${statCard({ label: 'Kas Masuk', value: rupiah(summary.totalIn), iconName: 'ArrowDownRight', tone: 'green', hint: `${summary.count} transaksi` })}
+        ${statCard({ label: 'Kas Keluar', value: rupiah(summary.totalOut), iconName: 'ArrowUpRight', tone: 'rose' })}
+        ${statCard({ label: 'Saldo Kas', value: rupiah(summary.balance), iconName: 'Wallet', tone: 'brand' })}
+        ${statCard({ label: 'Deposit Ditahan', value: rupiah(summary.depositHeld), iconName: 'Landmark', tone: 'amber', hint: 'Kewajiban, bukan pendapatan' })}
+      </div>
+
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed">
+        <p class="font-extrabold mb-1">Cara membaca buku kas</p>
+        Deposit masuk sebagai <b>kas</b>, tetapi bukan pendapatan. Deposit dicatat sebagai kewajiban
+        sampai dikembalikan saat check-out. Pendapatan operasional = kas masuk − deposit masuk.
+        Nilai pendapatan operasional saat ini <b>${rupiah(summary.operatingIn)}</b>.
+      </div>
+
+      <div class="card overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-line">
+          <div>
+            <h2 class="text-sm font-extrabold text-stone-800">Buku Kas &amp; Transaksi Terakhir</h2>
+            <p class="text-[11px] text-stone-500 mt-0.5">Deposit, sewa, laundry/POS, invoice layanan, dan pengeluaran dalam satu catatan.</p>
+          </div>
+          <span class="badge-gold">${entries.length} baris</span>
+        </div>
+        <div class="p-3 flex flex-col sm:flex-row gap-2 border-b border-line bg-cream/40">
+          <select id="ledger-category" class="select input-sm sm:w-56">
+            <option value="">Semua kategori</option>
+            ${categories
+              .map(
+                (category) =>
+                  `<option value="${esc(category)}" ${ledgerCategory === category ? 'selected' : ''}>${esc(category)}</option>`,
+              )
+              .join('')}
+          </select>
+          <div class="relative flex-1">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500">${icon('Search', 'w-3.5 h-3.5')}</span>
+            <input id="ledger-search" type="search" class="input input-sm pl-8" placeholder="Cari keterangan / nama / nomor…" value="${esc(ledgerSearch)}" />
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Tanggal</th><th>Keterangan</th><th>Kategori</th><th>Metode</th><th>Masuk</th><th>Keluar</th><th>Saldo</th></tr></thead>
+            <tbody>
+              ${
+                entries.length
+                  ? entries
+                      .map(
+                        (entry) => `
+                        <tr>
+                          <td class="whitespace-nowrap text-[11px]">${formatDate(entry.date)}</td>
+                          <td>
+                            <p class="font-semibold text-stone-700">${esc(entry.description)}</p>
+                            <p class="text-[10px] text-stone-500">${[entry.party, entry.roomNumber ? `Kamar ${entry.roomNumber}` : '', entry.reference].filter(Boolean).map(esc).join(' · ')}</p>
+                          </td>
+                          <td><span class="${entry.isDeposit ? 'badge-amber' : 'badge-gray'} normal-case tracking-normal">${esc(entry.category)}</span></td>
+                          <td class="text-[11px] text-stone-600">${esc(entry.method || '—')}</td>
+                          <td class="font-bold text-emerald-700 whitespace-nowrap">${entry.direction === 'in' ? rupiah(entry.amount) : '—'}</td>
+                          <td class="font-bold text-rose-700 whitespace-nowrap">${entry.direction === 'out' ? rupiah(entry.amount) : '—'}</td>
+                          <td class="font-black text-stone-800 whitespace-nowrap">${rupiah(entry.balanceAfter)}</td>
+                        </tr>`,
+                      )
+                      .join('')
+                  : emptyRow(7, 'Belum ada transaksi keuangan yang cocok.')
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function depositsSection() {
+  const accounts = getDepositAccounts();
+  const summary = getDepositSummary();
+  const owner = isOwner();
+
+  return `
+    <div class="space-y-5">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        ${statCard({ label: 'Deposit Ditahan', value: rupiah(summary.held), iconName: 'Landmark', tone: 'amber', hint: 'Kewajiban yang harus dikembalikan' })}
+        ${statCard({ label: 'Sudah Diterima', value: rupiah(summary.paid), iconName: 'ArrowDownRight', tone: 'green' })}
+        ${statCard({ label: 'Belum Dibayar', value: rupiah(summary.outstanding), iconName: 'CircleAlert', tone: summary.outstanding ? 'rose' : 'green', hint: `${summary.unpaidCount} kamar belum setor` })}
+        ${statCard({ label: 'Sudah Dikembalikan', value: rupiah(summary.refunded), iconName: 'ArrowUpRight' })}
+      </div>
+
+      <div class="rounded-2xl border border-line bg-cream/60 p-4 text-xs text-stone-600 leading-relaxed">
+        <b class="text-stone-800">Deposit = uang jaminan, bukan DP sewa.</b>
+        Deposit tidak dihitung sebagai pendapatan. Saat check-out, deposit dikembalikan sesuai ketentuan.
+        Gunakan tombol <b>Catat / Sesuaikan</b> untuk memperbarui status setoran deposit per kamar.
+      </div>
+
+      <div class="card overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-line">
+          <div>
+            <h2 class="text-sm font-extrabold text-stone-800">Status Deposit per Kamar</h2>
+            <p class="text-[11px] text-stone-500 mt-0.5">${accounts.length} penghuni aktif/booking · target ${rupiah(summary.target)}</p>
+          </div>
+          ${
+            owner
+              ? `<button type="button" class="btn-outline btn-sm" data-action="import-deposit">${icon('Upload', 'w-4 h-4')} Impor Spreadsheet</button>`
+              : ''
+          }
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Kamar</th><th>Penghuni</th><th>Target</th><th>Diterima</th><th>Dikembalikan</th><th>Sisa</th><th>Status</th><th class="text-right">Aksi</th></tr></thead>
+            <tbody>
+              ${
+                accounts.length
+                  ? accounts
+                      .map(
+                        (account) => `
+                        <tr>
+                          <td class="font-black text-stone-800 whitespace-nowrap">${esc(account.roomNumber)}</td>
+                          <td>
+                            <p class="font-bold text-stone-800">${esc(account.name)}</p>
+                            <p class="text-[10px] text-stone-500">${account.kind === 'booking' ? 'Booking' : 'Penghuni aktif'}</p>
+                          </td>
+                          <td class="whitespace-nowrap">${rupiah(account.deposit)}</td>
+                          <td class="font-bold text-emerald-700 whitespace-nowrap">${rupiah(account.depositPaid)}</td>
+                          <td class="font-bold text-rose-700 whitespace-nowrap">${rupiah(account.depositRefunded)}</td>
+                          <td class="font-black ${account.outstanding ? 'text-rose-700' : 'text-emerald-700'} whitespace-nowrap">${rupiah(account.outstanding)}</td>
+                          <td>
+                            ${account.kind === 'booking' ? '<span class="badge-blue">Booking</span> ' : ''}
+                            ${
+                              account.deposit <= 0
+                                ? '<span class="badge-gray">Tanpa deposit</span>'
+                                : account.outstanding > 0
+                                  ? '<span class="badge-amber">Belum lunas</span>'
+                                  : '<span class="badge-green">Lunas</span>'
+                            }
+                          </td>
+                          <td>
+                            <div class="flex items-center justify-end gap-1">
+                              ${
+                                owner
+                                  ? `<button type="button" class="btn-outline btn-xs" data-action="adjust-deposit" data-kind="${account.kind}" data-id="${account.id}">${icon('Pencil', 'w-3 h-3')} Catat</button>`
+                                  : ''
+                              }
+                              ${
+                                owner && account.depositHeld > 0
+                                  ? `<button type="button" class="btn-ghost btn-xs text-rose-600" data-action="refund-deposit" data-kind="${account.kind}" data-id="${account.id}" title="Kembalikan deposit">${icon('ArrowUpRight', 'w-3.5 h-3.5')}</button>`
+                                  : ''
+                              }
+                            </div>
+                          </td>
+                        </tr>`,
+                      )
+                      .join('')
+                  : emptyRow(8, 'Belum ada penghuni aktif atau booking.')
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderTab() {
+  if (activeTab === 'ledger') return ledgerSection();
+  if (activeTab === 'deposits') return depositsSection();
   if (activeTab === 'invoices') return invoicesSection();
   if (activeTab === 'accrual') return accrualSection();
   if (activeTab === 'pnl') return pnlSection();
@@ -336,7 +515,7 @@ export function render(root) {
       ${pageHeader({
         eyebrow: 'Accounting System',
         title: 'Financial & Keuangan 📊',
-        subtitle: 'Jurnal pengeluaran, invoice layanan, pendapatan accrual, dan laba rugi.',
+        subtitle: 'Buku kas, deposit/jaminan, pengeluaran, invoice layanan, pendapatan accrual, dan laba rugi.',
         actions: `
           <button type="button" class="btn-outline btn-sm" data-action="add-expense">${icon('Plus', 'w-4 h-4')} Catat Pengeluaran</button>
           <button type="button" class="btn-primary btn-sm" data-action="add-invoice">${icon('FilePlus2', 'w-4 h-4')} Buat Invoice</button>
@@ -379,12 +558,33 @@ export function render(root) {
 
   paint();
 
+  delegate(scope, 'change', '#ledger-search', (event, target) => {
+    ledgerSearch = target.value;
+    paint();
+  });
+  delegate(scope, 'change', '#ledger-category', (event, target) => {
+    ledgerCategory = target.value;
+    paint();
+  });
+
   delegate(scope, 'click', '[data-action]', async (event, target) => {
     const action = target.dataset.action;
     const id = Number(target.dataset.id);
 
     if (action === 'add-expense') {
       openExpenseModal();
+      return;
+    }
+    if (action === 'import-deposit') {
+      openDepositImportModal(paint);
+      return;
+    }
+    if (action === 'adjust-deposit') {
+      openDepositAdjustModal(target.dataset.kind, id, paint);
+      return;
+    }
+    if (action === 'refund-deposit') {
+      openDepositRefundModal(target.dataset.kind, id, paint);
       return;
     }
     if (action === 'add-invoice') {

@@ -144,9 +144,34 @@ function migrate(stored) {
   }
 
   // v5: tenants and active bookings store an email address for billing.
-  merged.tenants = merged.tenants.map((tenant) => ({ email: '', ...tenant }));
+  // v8: deposits are tracked separately from rent payments. `deposit` is the
+  // refundable target, `depositPaid` is cash received, and `depositRefunded`
+  // is cash returned at check-out.
+  merged.tenants = merged.tenants.map((tenant) => ({
+    email: '',
+    deposit: 0,
+    depositPaid: 0,
+    depositRefunded: 0,
+    depositHistory: [],
+    ...tenant,
+    depositHistory: Array.isArray(tenant.depositHistory) ? tenant.depositHistory : [],
+  }));
   merged.rooms = merged.rooms.map((room) =>
-    room.booking ? { ...room, booking: { email: '', ...room.booking } } : room,
+    room.booking
+      ? {
+          ...room,
+          booking: {
+            email: '',
+            depositPaid: 0,
+            depositRefunded: 0,
+            depositHistory: [],
+            ...room.booking,
+            depositHistory: Array.isArray(room.booking.depositHistory)
+              ? room.booking.depositHistory
+              : [],
+          },
+        }
+      : room,
   );
 
   // Keep the public WhatsApp number filled for saves created before the

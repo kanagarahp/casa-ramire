@@ -9,6 +9,7 @@ import {
   tenantStayLabel,
   updateTenant,
 } from '../services/property.js';
+import { getDepositAccount } from '../services/deposit.js';
 import { avatar, billBadge } from '../ui/components.js';
 import { esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -19,6 +20,7 @@ import {
   openExtendModal,
   openMoveRoomModal,
 } from './booking-modal.js';
+import { openDepositAdjustModal, openDepositRefundModal } from './deposit-modals.js';
 
 function tabButton(id, label, iconName, active) {
   return `
@@ -47,6 +49,7 @@ export function openTenantDetail(tenantId) {
     .filter((invoice) => String(invoice.tenantId) === String(tenant.id))
     .sort((a, b) => b.id - a.id);
   const outstanding = getOutstandingForTenant(tenant.id);
+  const depositAccount = getDepositAccount('tenant', tenant.id);
 
   const payments = [
     ...bills.map((bill) => ({
@@ -67,14 +70,16 @@ export function openTenantDetail(tenantId) {
     })),
   ];
   const billedRows = [...payments];
-  const paymentRows = (tenant.payments || []).map((payment) => ({
-    key: `payment-${payment.id}`,
-    label: payment.type || 'Pembayaran',
-    date: payment.date || payment.createdAt,
-    amount: payment.amount,
-    status: 'paid',
-    note: [payment.method, payment.note].filter(Boolean).join(' · '),
-  }));
+  const paymentRows = (tenant.payments || [])
+    .filter((payment) => String(payment.type || '').toLowerCase() !== 'deposit')
+    .map((payment) => ({
+      key: `payment-${payment.id}`,
+      label: payment.type || 'Pembayaran',
+      date: payment.date || payment.createdAt,
+      amount: payment.amount,
+      status: 'paid',
+      note: [payment.method, payment.note].filter(Boolean).join(' · '),
+    }));
 
   if (paymentRows.length) {
     payments.length = 0;
@@ -143,6 +148,43 @@ export function openTenantDetail(tenantId) {
           </span>
         </div>
       </div>
+
+      ${
+        depositAccount
+          ? `<div class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+              <div class="flex flex-wrap items-start gap-3">
+                <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">${icon('Landmark', 'w-5 h-5')}</span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="text-sm font-extrabold text-amber-900">Deposit / Jaminan</p>
+                    ${
+                      depositAccount.deposit <= 0
+                        ? '<span class="badge-gray">Tanpa deposit</span>'
+                        : depositAccount.outstanding > 0
+                          ? '<span class="badge-amber">Belum lunas</span>'
+                          : '<span class="badge-green">Lunas</span>'
+                    }
+                  </div>
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-[11px]">
+                    <div><p class="text-amber-700 font-bold uppercase text-[9px]">Target</p><p class="font-black text-stone-800">${rupiah(depositAccount.deposit)}</p></div>
+                    <div><p class="text-amber-700 font-bold uppercase text-[9px]">Diterima</p><p class="font-black text-emerald-700">${rupiah(depositAccount.depositPaid)}</p></div>
+                    <div><p class="text-amber-700 font-bold uppercase text-[9px]">Dikembalikan</p><p class="font-black text-rose-700">${rupiah(depositAccount.depositRefunded)}</p></div>
+                    <div><p class="text-amber-700 font-bold uppercase text-[9px]">Sisa belum bayar</p><p class="font-black ${depositAccount.outstanding ? 'text-rose-700' : 'text-emerald-700'}">${rupiah(depositAccount.outstanding)}</p></div>
+                  </div>
+                  <p class="text-[10px] text-amber-800 mt-2">Deposit bukan DP dan bukan pendapatan. Dana ditahan sebagai kewajiban sampai check-out.</p>
+                </div>
+                <div class="flex flex-wrap gap-1.5 ml-auto">
+                  <button type="button" class="btn-outline btn-xs" data-action="deposit-adjust">${icon('Pencil', 'w-3 h-3')} Catat / Sesuaikan</button>
+                  ${
+                    depositAccount.depositHeld > 0
+                      ? `<button type="button" class="btn-ghost btn-xs text-rose-600" data-action="deposit-refund">${icon('ArrowUpRight', 'w-3.5 h-3.5')} Kembalikan</button>`
+                      : ''
+                  }
+                </div>
+              </div>
+            </div>`
+          : ''
+      }
 
       <div class="flex flex-wrap gap-2 border-b border-line pb-2">
         ${tabButton('biodata', 'Biodata', 'UserRound', true)}
@@ -326,6 +368,20 @@ export function openTenantDetail(tenantId) {
         } catch (error) {
           toast(error.message, 'error');
         }
+      });
+
+      el.querySelector('[data-action="deposit-adjust"]')?.addEventListener('click', () => {
+        openDepositAdjustModal('tenant', tenant.id, () => {
+          close();
+          setTimeout(() => openTenantDetail(tenant.id), 0);
+        });
+      });
+
+      el.querySelector('[data-action="deposit-refund"]')?.addEventListener('click', () => {
+        openDepositRefundModal('tenant', tenant.id, () => {
+          close();
+          setTimeout(() => openTenantDetail(tenant.id), 0);
+        });
       });
 
       el.querySelector('[data-action="extend"]')?.addEventListener('click', () => {

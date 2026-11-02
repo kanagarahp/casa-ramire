@@ -1,4 +1,4 @@
-import { PERIODS } from '../core/constants.js';
+import { PAYMENT_METHODS, PERIODS } from '../core/constants.js';
 import {
   addDays,
   formatDate,
@@ -20,6 +20,7 @@ import {
   moveTenant,
   saveBooking,
 } from '../services/property.js';
+import { getDepositAccount, refundDeposit } from '../services/deposit.js';
 import { createRenewalPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { computeQuote, getDepositDefault, getPromo, getPromos } from '../services/pricing.js';
 import { isDokuEnabled } from '../services/settings.js';
@@ -82,6 +83,9 @@ function summaryBody(quote, mode) {
     `<div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-bold text-stone-700">${totalLabel}</span><span class="font-extrabold text-stone-800">${rupiah(quote.grandTotal)}</span></div>`,
     quote.deposit > 0
       ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Deposit (jaminan)</span><span class="font-bold">${rupiah(quote.deposit)}</span></div>`
+      : '',
+    quote.deposit > 0 && !quote.depositPaid
+      ? `<div class="flex justify-between gap-3 text-amber-800"><span>Deposit belum dibayar</span><span class="font-bold">${rupiah(quote.deposit)}</span></div>`
       : '',
     `<div class="flex justify-between gap-3 text-emerald-700"><span class="font-bold">Dibayar sekarang</span><span class="font-extrabold">${rupiah(quote.payNow)}</span></div>`,
     `<div class="flex justify-between gap-3 ${quote.remaining > 0 ? 'text-rose-700' : 'text-stone-500'}"><span class="font-semibold">Sisa tagihan</span><span class="font-extrabold">${rupiah(quote.remaining)}</span></div>`,
@@ -148,6 +152,11 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
     : booking?.deposit ?? getDepositDefault();
   const initialPayOption = isExtend ? 'full' : booking?.payOption || (mode === 'checkin' ? 'full' : 'partial');
   const initialDepositEnabled = isExtend ? false : booking ? booking.deposit > 0 : true;
+  const initialDepositPaid = isExtend
+    ? false
+    : booking && booking.deposit > 0
+      ? Number(booking.depositPaid) > 0
+      : true;
 
   const guestSection = isExtend
     ? `
@@ -247,22 +256,26 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
                 <input id="bm-deposit-enabled" type="checkbox" class="w-4 h-4 accent-brand" ${initialDepositEnabled ? 'checked' : ''} />
                 <span class="text-xs font-bold text-stone-800">Kenakan deposit</span>
               </label>
-              <div id="bm-deposit-wrap" class="${initialDepositEnabled ? '' : 'hidden'}">
+              <div id="bm-deposit-wrap" class="${initialDepositEnabled ? '' : 'hidden'} space-y-2">
                 <input id="bm-deposit" type="number" min="0" step="1000" class="input input-sm" placeholder="Nominal deposit" value="${toNumber(initialDeposit) || ''}" />
+                <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl border border-line bg-white">
+                  <input id="bm-deposit-paid" type="checkbox" class="w-4 h-4 accent-brand" ${initialDepositPaid ? 'checked' : ''} />
+                  <span class="text-[11px] font-bold text-stone-700">Deposit sudah dibayar / diterima</span>
+                </label>
               </div>
-              <p class="hint">Deposit adalah jaminan, tidak dihitung sebagai pendapatan sewa.</p>
+              <p class="hint">Deposit adalah uang jaminan, bukan DP sewa. Tidak dihitung sebagai pendapatan dan dikembalikan saat check-out sesuai ketentuan.</p>
             </div>
           `
         }
         <div class="rounded-2xl border border-line bg-white p-4 space-y-2">
-          <p class="text-xs font-bold text-stone-800">Opsi pembayaran</p>
+          <p class="text-xs font-bold text-stone-800">Opsi pembayaran sewa</p>
           <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl border border-line hover:bg-stone-50">
             <input type="radio" name="bm-pay-option" value="partial" class="accent-brand" ${initialPayOption === 'partial' ? 'checked' : ''} />
-            <span class="text-xs font-semibold">${isExtend ? 'Catat sebagai tagihan' : 'Deposit saja (DP)'}</span>
+            <span class="text-xs font-semibold">${isExtend ? 'Catat sebagai tagihan' : 'Sewa belum dibayar (buat tagihan)'}</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl border border-line hover:bg-stone-50">
             <input type="radio" name="bm-pay-option" value="full" class="accent-brand" ${initialPayOption === 'full' ? 'checked' : ''} />
-            <span class="text-xs font-semibold">${isExtend ? 'Lunas sekarang' : 'Deposit + sewa (lunas)'}</span>
+            <span class="text-xs font-semibold">${isExtend ? 'Lunas sekarang' : 'Sewa lunas sekarang'}</span>
           </label>
         </div>
       </div>
@@ -307,6 +320,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
       const endInput = el.querySelector('#bm-end');
       const endWrap = el.querySelector('#bm-end-wrap');
       const depositToggle = el.querySelector('#bm-deposit-enabled');
+      const depositPaidToggle = el.querySelector('#bm-deposit-paid');
       const depositWrap = el.querySelector('#bm-deposit-wrap');
       const promoSelect = el.querySelector('#bm-promo');
 
@@ -344,6 +358,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
             addons,
             depositEnabled: Boolean(depositToggle?.checked),
             depositValue: toNumber(value('#bm-deposit')),
+            depositPaid: Boolean(depositPaidToggle?.checked),
             payOption: getPayOption(),
           });
         } catch (error) {
@@ -428,6 +443,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
         addons,
         depositEnabled: Boolean(depositToggle?.checked),
         depositValue: toNumber(value('#bm-deposit')),
+        depositPaidNow: Boolean(depositPaidToggle?.checked),
         payOption: getPayOption(),
         notes: value('#bm-notes'),
         emergencyContact: {
@@ -572,10 +588,12 @@ export function openCheckoutModal(tenantId) {
   const tenant = getTenant(tenantId);
   if (!tenant) return;
   const outstanding = getOutstandingForTenant(tenantId);
+  const depositAccount = getDepositAccount('tenant', tenantId);
+  const depositHeld = depositAccount?.depositHeld || 0;
 
   openModal({
     title: `Check-out ${tenant.name}`,
-    subtitle: `Kamar ${tenant.roomNumber || '—'} akan dikosongkan.`,
+    subtitle: `Kamar ${tenant.roomNumber || '-'} akan dikosongkan.`,
     size: 'md',
     body: `
       <div class="space-y-4">
@@ -594,7 +612,43 @@ export function openCheckoutModal(tenantId) {
                 <span>Tidak ada tunggakan. Kamar siap dikosongkan.</span>
               </div>`
         }
-        <p class="hint">Riwayat hunian dan pembayaran tetap tersimpan pada profil penghuni.</p>
+
+        ${
+          depositHeld > 0
+            ? `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <p class="text-[11px] font-extrabold uppercase tracking-wider text-amber-800">Deposit ditahan</p>
+                    <p class="text-xl font-black text-amber-900 mt-1">${rupiah(depositHeld)}</p>
+                  </div>
+                  <span class="badge-amber">Jaminan</span>
+                </div>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input id="co-refund-deposit" type="checkbox" class="w-4 h-4 accent-brand" checked />
+                  <span class="text-xs font-bold text-stone-800">Kembalikan deposit saat check-out</span>
+                </label>
+                <div id="co-refund-wrap" class="grid sm:grid-cols-2 gap-2">
+                  <div>
+                    <label class="label" for="co-refund-amount">Nominal dikembalikan</label>
+                    <input id="co-refund-amount" type="number" min="0" step="1000" class="input input-sm" value="${depositHeld}" />
+                  </div>
+                  <div>
+                    <label class="label" for="co-refund-method">Metode</label>
+                    <select id="co-refund-method" class="select">
+                      ${PAYMENT_METHODS.map((method) => `<option value="${esc(method)}">${esc(method)}</option>`).join('')}
+                    </select>
+                  </div>
+                </div>
+                <p class="text-[10px] text-amber-800 leading-relaxed">Pengembalian deposit dicatat sebagai kas keluar. Jika ada kerusakan, kurangi nominal atau hilangkan centang untuk menahan deposit.</p>
+              </div>`
+            : depositAccount && depositAccount.outstanding > 0
+              ? `<div class="rounded-2xl border border-line bg-stone-50 p-3.5 text-xs text-stone-600">
+                  Deposit belum dibayar penuh. Sisa deposit yang belum disetor: <b>${rupiah(depositAccount.outstanding)}</b>.
+                </div>`
+              : ''
+        }
+
+        <p class="hint">Riwayat hunian, pembayaran, dan deposit tetap tersimpan pada profil penghuni.</p>
       </div>
     `,
     footer: `
@@ -602,9 +656,25 @@ export function openCheckoutModal(tenantId) {
       <button type="button" class="btn-danger btn-sm" data-checkout>${icon('DoorOpen', 'w-4 h-4')} Proses check-out</button>
     `,
     onMount(el, close) {
+      const refundToggle = el.querySelector('#co-refund-deposit');
+      const refundWrap = el.querySelector('#co-refund-wrap');
+      refundToggle?.addEventListener('change', () => {
+        refundWrap?.classList.toggle('hidden', !refundToggle.checked);
+      });
+
       el.querySelector('[data-checkout]')?.addEventListener('click', () => {
         const date = el.querySelector('#co-date').value || todayISO();
         try {
+          if (refundToggle?.checked) {
+            const amount = toNumber(el.querySelector('#co-refund-amount').value);
+            if (amount > 0) {
+              refundDeposit('tenant', tenant.id, amount, {
+                date,
+                method: el.querySelector('#co-refund-method').value,
+                note: 'Pengembalian deposit check-out',
+              });
+            }
+          }
           checkoutTenant(tenant.id, date);
           toast(`${tenant.name} berhasil check-out.`);
           close();

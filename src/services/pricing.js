@@ -78,6 +78,7 @@ export function computeQuote({
   addons = [],
   depositEnabled = false,
   depositValue = 0,
+  depositPaid = true,
   payOption = 'partial',
 }) {
   const period = periodDefinition(periode);
@@ -107,6 +108,8 @@ export function computeQuote({
   const rentTotal = Math.max(0, base - discount);
   const grandTotal = rentTotal + addonTotal;
   const deposit = depositEnabled ? Math.max(0, Math.round(toNumber(depositValue))) : 0;
+  const depositPaidAmount = depositPaid ? deposit : 0;
+  const depositOutstanding = Math.max(0, deposit - depositPaidAmount);
   const isFull = payOption === 'full';
 
   const monthlyRate = getRate(lantai, '1') || Math.round(base / Math.max(1, units));
@@ -127,8 +130,11 @@ export function computeQuote({
     addonTotal,
     grandTotal,
     deposit,
+    depositPaid: Boolean(depositPaid),
+    depositPaidAmount,
+    depositOutstanding,
     payOption: isFull ? 'full' : 'partial',
-    payNow: deposit + (isFull ? grandTotal : 0),
+    payNow: depositPaidAmount + (isFull ? grandTotal : 0),
     rentPaidNow: isFull ? grandTotal : 0,
     remaining: isFull ? 0 : grandTotal,
     monthlyCharge,
