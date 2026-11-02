@@ -14,6 +14,7 @@ import {
 import { getState } from '../core/store.js';
 import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { sendBillByEmail } from '../services/billing-notify.js';
+import { isDokuEnabled } from '../services/settings.js';
 import { buildMessage } from '../services/templates.js';
 import {
   billBadge,
@@ -57,6 +58,7 @@ function emailOf(record) {
 function billRow(bill) {
   const overdue = isOverdue(bill);
   const email = emailOf(bill);
+  const doku = isDokuEnabled();
   const message = buildMessage('tagihan', {
     nama: bill.tenantName || 'Penghuni',
     kamar: bill.roomNumber || '—',
@@ -88,7 +90,7 @@ function billRow(bill) {
           ${
             bill.status === 'unpaid'
               ? `
-                <button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bill.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>
+                ${doku ? `<button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bill.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>` : ''}
                 <button type="button" class="btn-outline btn-xs" data-action="email-bill" data-id="${bill.id}" ${email ? '' : 'disabled title="Email penghuni belum diisi"'}>${icon('Send', 'w-3 h-3')} Kirim Tagihan</button>
                 <button type="button" class="btn-primary btn-xs" data-action="verify" data-id="${bill.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
                 ${
@@ -289,6 +291,10 @@ export function render(root) {
     }
 
     if (action === 'doku-link') {
+      if (!isDokuEnabled()) {
+        toast('Link DOKU belum diaktifkan. Aktifkan di Pengaturan setelah akun DOKU siap.', 'warning');
+        return;
+      }
       const bill = getBills().find((item) => String(item.id) === String(id));
       if (!bill) return;
       const message = buildMessage('tagihan', {

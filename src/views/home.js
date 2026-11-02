@@ -203,11 +203,7 @@ function quoteFor(catalog, { floor, periode, startDate, endDate, promo, car }) {
 function hero(catalog) {
   const property = catalog.property;
   const first = catalog.gallery[0];
-  const stats = [
-    { label: 'Total kamar', value: catalog.availability.total ?? catalog.rooms.length },
-    { label: 'Terisi', value: catalog.availability.occupied ?? 0 },
-    { label: 'Tersisa', value: catalog.availability.available ?? 0, accent: true },
-  ];
+  const available = Number(catalog.availability.available) || 0;
 
   return `
     <div class="relative rounded-[2rem] overflow-hidden bg-brand shadow-xl aspect-[4/3] lg:aspect-[5/4]">
@@ -223,16 +219,12 @@ function hero(catalog) {
       <div class="absolute inset-x-0 bottom-0 p-5 sm:p-6 bg-gradient-to-t from-stone-950/85 via-stone-950/30 to-transparent">
         <p class="text-[10px] font-extrabold uppercase tracking-[0.22em] text-gold">${esc(property.name)} · Kos Deluxe</p>
         <p class="text-white font-black text-xl sm:text-2xl mt-1">${esc(first?.caption || 'Suasana kamar & area Casa Ramire')}</p>
-        <div class="grid grid-cols-3 gap-2 mt-4">
-          ${stats
-            .map(
-              (stat) => `
-              <div class="rounded-xl bg-white/10 border border-white/15 px-2.5 py-2 backdrop-blur">
-                <p class="text-[8px] font-extrabold uppercase tracking-wider ${stat.accent ? 'text-gold' : 'text-stone-300'}">${stat.label}</p>
-                <p class="text-lg font-black ${stat.accent ? 'text-gold' : 'text-white'} leading-tight">${stat.value}</p>
-              </div>`,
-            )
-            .join('')}
+        <div class="inline-flex items-center gap-3 rounded-xl bg-white/10 border border-white/15 px-3.5 py-2.5 backdrop-blur mt-4">
+          <span class="w-9 h-9 rounded-lg bg-gold/15 text-gold flex items-center justify-center shrink-0">${icon('DoorOpen', 'w-4 h-4')}</span>
+          <div>
+            <p class="text-[8px] font-extrabold uppercase tracking-wider text-stone-300">Kamar tersedia</p>
+            <p class="text-lg font-black text-gold leading-tight">${available} kamar</p>
+          </div>
         </div>
       </div>
     </div>
@@ -240,58 +232,38 @@ function hero(catalog) {
 }
 
 function availabilitySection(catalog) {
-  const total = Number(catalog.availability.total) || catalog.rooms.length || 0;
   const available = Number(catalog.availability.available) || 0;
-  const occupied = Number(catalog.availability.occupied) || 0;
-  const booked = Number(catalog.availability.booked) || 0;
-  const percent = total ? Math.round((available / total) * 100) : 0;
+  const availableRooms = catalog.rooms.filter((room) => room.status === 'kosong');
 
   const availableByFloor = ['2', '3'].map((floor) => ({
     floor,
-    rooms: catalog.rooms.filter(
-      (room) => room.status === 'kosong' && String(room.lantai) === floor,
-    ),
+    rooms: availableRooms.filter((room) => String(room.lantai) === floor),
   }));
 
   return `
     <section id="ketersediaan" class="scroll-mt-20 py-12 sm:py-16 bg-white border-y border-line">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
-        <div class="grid lg:grid-cols-[1.1fr_0.9fr] gap-6 items-stretch">
+        <div class="grid lg:grid-cols-[1.05fr_0.95fr] gap-6 items-stretch">
           <div class="card rounded-3xl p-6 sm:p-8 flex flex-col">
             <span class="badge-gold">Ketersediaan Kamar</span>
             <h2 class="page-title mt-3">Satu tipe kamar, banyak pilihan durasi.</h2>
             <p class="page-subtitle max-w-xl">
-              Semua kamar bertipe Deluxe dengan fasilitas yang sama. Pilih lantai dan durasi sewa saat booking —
-              admin akan mengonfirmasi nomor kamar sesuai ketersediaan.
+              Semua kamar bertipe Deluxe dengan fasilitas yang sama. Lihat nomor kamar yang masih tersedia,
+              lalu pilih kamar dan durasi sewa saat booking.
             </p>
 
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
-              <div class="rounded-2xl border border-line bg-cream/60 p-3">
-                <p class="text-[9px] font-extrabold uppercase tracking-wider text-stone-500">Total</p>
-                <p class="text-2xl font-black text-stone-800 mt-1">${total}</p>
+            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 mt-6 flex items-end justify-between gap-4">
+              <div>
+                <p class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Kamar tersedia saat ini</p>
+                <p class="text-4xl font-black text-emerald-900 leading-none mt-1.5">${available}</p>
+                <p class="text-[11px] font-semibold text-emerald-800 mt-1">kamar siap ditempati</p>
               </div>
-              <div class="rounded-2xl border border-rose-200 bg-rose-50 p-3">
-                <p class="text-[9px] font-extrabold uppercase tracking-wider text-rose-700">Terisi</p>
-                <p class="text-2xl font-black text-rose-800 mt-1">${occupied}</p>
-              </div>
-              <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-3">
-                <p class="text-[9px] font-extrabold uppercase tracking-wider text-indigo-700">Booking</p>
-                <p class="text-2xl font-black text-indigo-800 mt-1">${booked}</p>
-              </div>
-              <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
-                <p class="text-[9px] font-extrabold uppercase tracking-wider text-emerald-700">Tersisa</p>
-                <p class="text-2xl font-black text-emerald-800 mt-1">${available}</p>
-              </div>
+              <span class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">${icon('DoorOpen', 'w-6 h-6')}</span>
             </div>
 
-            <div class="mt-5">
-              <div class="flex items-center justify-between text-[11px] font-bold text-stone-600 mb-1.5">
-                <span>Kamar tersedia</span>
-                <span>${percent}% dari ${total} kamar</span>
-              </div>
-              <div class="h-2.5 rounded-full bg-stone-100 overflow-hidden">
-                <div class="h-full rounded-full bg-emerald-500" style="width:${Math.max(0, Math.min(100, percent))}%"></div>
-              </div>
+            <div class="rounded-2xl border border-line bg-cream/60 p-3.5 mt-4 text-[11px] text-stone-600 leading-relaxed">
+              Klik nomor kamar di samping untuk langsung membuka form booking dengan kamar tersebut.
+              Admin akan mengonfirmasi ketersediaan sebelum check-in.
             </div>
 
             <div class="flex flex-wrap items-center gap-2.5 mt-6">
@@ -305,26 +277,35 @@ function availabilitySection(catalog) {
           </div>
 
           <div class="card rounded-3xl p-6 sm:p-8">
-            <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">Nomor kamar yang masih kosong</p>
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">Kamar yang masih tersedia</p>
+              <span class="badge-green">${available} kamar</span>
+            </div>
             <div class="space-y-4 mt-4">
-              ${availableByFloor
-                .map(
-                  (group) => `
-                  <div>
-                    <p class="text-xs font-bold text-stone-700 mb-2">Lantai ${group.floor}</p>
-                    ${
-                      group.rooms.length
-                        ? `<div class="flex flex-wrap gap-1.5">${group.rooms
-                            .map(
-                              (room) =>
-                                `<span class="badge-green normal-case tracking-normal">Kamar ${esc(room.nomor)}</span>`,
-                            )
-                            .join('')}</div>`
-                        : `<p class="text-xs text-stone-500 italic">Tidak ada kamar kosong di lantai ini.</p>`
-                    }
-                  </div>`,
-                )
-                .join('')}
+              ${
+                availableRooms.length
+                  ? availableByFloor
+                      .map(
+                        (group) => `
+                        <div>
+                          <p class="text-xs font-bold text-stone-700 mb-2">Lantai ${group.floor}</p>
+                          ${
+                            group.rooms.length
+                              ? `<div class="flex flex-wrap gap-1.5">${group.rooms
+                                  .map(
+                                    (room) =>
+                                      `<button type="button" class="badge-green normal-case tracking-normal hover:bg-emerald-200 transition" data-book-room="${esc(room.id)}" data-book-floor="${esc(room.lantai)}" title="Booking Kamar ${esc(room.nomor)}">Kamar ${esc(room.nomor)}</button>`,
+                                  )
+                                  .join('')}</div>`
+                              : `<p class="text-xs text-stone-500 italic">Tidak ada kamar kosong di lantai ini.</p>`
+                          }
+                        </div>`,
+                      )
+                      .join('')
+                  : `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed">
+                      <b>Belum ada kamar kosong.</b> Silakan hubungi admin untuk masuk daftar tunggu atau tanya jadwal kosong berikutnya.
+                    </div>`
+              }
             </div>
             <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 mt-5 text-[11px] text-amber-900 leading-relaxed">
               <b>Membawa mobil?</b> Ada tambahan parkir ${rupiah(CAR_FEE)}/bulan. Pilih opsi mobil di form booking —
@@ -523,20 +504,13 @@ function pageHtml(catalog, { preview }) {
                   }
                 </div>
 
-                <dl class="grid grid-cols-3 gap-3 mt-8 max-w-lg">
-                  <div class="rounded-2xl bg-white border border-line p-3.5">
-                    <dt class="text-[9px] font-extrabold uppercase tracking-wider text-stone-500">Total kamar</dt>
-                    <dd class="text-xl font-black text-stone-800 mt-1">${catalog.availability.total ?? catalog.rooms.length}</dd>
+                <div class="inline-flex items-center gap-3.5 rounded-2xl bg-white border border-line p-4 mt-8">
+                  <span class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">${icon('DoorOpen', 'w-5 h-5')}</span>
+                  <div>
+                    <p class="text-[9px] font-extrabold uppercase tracking-wider text-stone-500">Kamar tersedia</p>
+                    <p class="text-2xl font-black text-emerald-700 leading-tight">${catalog.availability.available ?? 0}</p>
                   </div>
-                  <div class="rounded-2xl bg-white border border-line p-3.5">
-                    <dt class="text-[9px] font-extrabold uppercase tracking-wider text-stone-500">Terisi</dt>
-                    <dd class="text-xl font-black text-rose-700 mt-1">${catalog.availability.occupied ?? 0}</dd>
-                  </div>
-                  <div class="rounded-2xl bg-white border border-line p-3.5">
-                    <dt class="text-[9px] font-extrabold uppercase tracking-wider text-stone-500">Tersisa</dt>
-                    <dd class="text-xl font-black text-emerald-700 mt-1">${catalog.availability.available ?? 0}</dd>
-                  </div>
-                </dl>
+                </div>
 
                 <p class="text-[11px] text-stone-500 mt-4 flex items-center gap-1.5">
                   ${icon('MapPin', 'w-3.5 h-3.5 text-gold-700')}
@@ -761,10 +735,12 @@ function summaryHtml(quote, deposit) {
   `;
 }
 
-function openBookingModal(catalog, { floor = '2', periode = '1' } = {}) {
+function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } = {}) {
   let appliedCode = '';
   let initialFloor = String(floor);
   let initialPeriode = String(periode);
+  let selectedRoomId = String(roomId || '');
+  const availableRooms = (catalog.rooms || []).filter((room) => room.status === 'kosong');
   const deposit = Number(catalog.property.deposit) || 0;
 
   const instance = openModal({
@@ -793,13 +769,18 @@ function openBookingModal(catalog, { floor = '2', periode = '1' } = {}) {
           </div>
         </div>
 
-        <div class="grid sm:grid-cols-3 gap-3">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label class="label" for="hm-floor">Lantai</label>
             <select id="hm-floor" class="select">
               <option value="2" ${initialFloor === '2' ? 'selected' : ''}>Lantai 2</option>
               <option value="3" ${initialFloor === '3' ? 'selected' : ''}>Lantai 3</option>
             </select>
+          </div>
+          <div>
+            <label class="label" for="hm-room">Pilihan kamar</label>
+            <select id="hm-room" class="select"></select>
+            <p class="hint mt-1">Kosongkan agar admin memilihkan.</p>
           </div>
           <div>
             <label class="label" for="hm-periode">Durasi sewa</label>
@@ -866,12 +847,34 @@ function openBookingModal(catalog, { floor = '2', periode = '1' } = {}) {
       const summary = el.querySelector('#hm-summary');
       const promoInput = el.querySelector('#hm-promo');
       const promoStatus = el.querySelector('#hm-promo-status');
+      const floorSelect = el.querySelector('#hm-floor');
+      const roomSelect = el.querySelector('#hm-room');
       const periodeSelect = el.querySelector('#hm-periode');
       const startInput = el.querySelector('#hm-start');
       const endInput = el.querySelector('#hm-end');
       const endWrap = el.querySelector('#hm-end-wrap');
       const submitButton = el.querySelector('[data-submit]');
       const isShortPeriod = (periode) => periode === 'harian' || periode === 'mingguan';
+
+      const paintRoomOptions = () => {
+        const floorRooms = availableRooms.filter(
+          (room) => String(room.lantai) === String(floorSelect.value),
+        );
+        roomSelect.innerHTML = [
+          `<option value="">Admin pilihkan</option>`,
+          ...floorRooms.map(
+            (room) =>
+              `<option value="${esc(room.id)}" ${String(room.id) === String(selectedRoomId) ? 'selected' : ''}>Kamar ${esc(room.nomor)}</option>`,
+          ),
+        ].join('');
+        if (!floorRooms.some((room) => String(room.id) === String(selectedRoomId))) {
+          selectedRoomId = '';
+          roomSelect.value = '';
+        }
+      };
+      roomSelect.addEventListener('change', () => {
+        selectedRoomId = roomSelect.value;
+      });
 
       const toggleEnd = () => {
         const short = isShortPeriod(periodeSelect.value);
@@ -973,7 +976,10 @@ function openBookingModal(catalog, { floor = '2', periode = '1' } = {}) {
       });
 
       el.querySelector('#hm-car').addEventListener('change', paintSummary);
-      el.querySelector('#hm-floor').addEventListener('change', paintSummary);
+      floorSelect.addEventListener('change', () => {
+        paintRoomOptions();
+        paintSummary();
+      });
       periodeSelect.addEventListener('change', () => {
         toggleEnd();
         paintSummary();
@@ -989,6 +995,7 @@ function openBookingModal(catalog, { floor = '2', periode = '1' } = {}) {
       });
       endInput.addEventListener('change', paintSummary);
 
+      paintRoomOptions();
       toggleEnd();
       paintPromoStatus();
       paintSummary();
@@ -1008,6 +1015,10 @@ function openBookingModal(catalog, { floor = '2', periode = '1' } = {}) {
         if (phone.replace(/\D/g, '').length < 8) return toast('Nomor WhatsApp tidak valid.', 'warning');
         if (!isValidEmail(email)) return toast('Alamat email tidak valid.', 'warning');
 
+        const chosenRoom = availableRooms.find(
+          (room) => String(room.id) === String(roomSelect.value),
+        );
+
         const payload = {
           name,
           phone,
@@ -1020,6 +1031,8 @@ function openBookingModal(catalog, { floor = '2', periode = '1' } = {}) {
             phone: value('#hm-ec-phone'),
           },
           floor: el.querySelector('#hm-floor').value,
+          roomId: chosenRoom?.id || '',
+          roomNumber: chosenRoom?.nomor || '',
           periode: periodeSelect.value,
           startDate: startInput.value || todayISO(),
           endDate: isShortPeriod(periodeSelect.value) ? endInput.value : '',
@@ -1067,6 +1080,7 @@ function openBookingSuccessModal(catalog, request, quote) {
           <div class="flex justify-between gap-3"><span class="text-stone-500">Nama</span><b class="text-stone-800">${esc(request.name)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Email</span><b class="text-stone-800 break-all text-right">${esc(request.email)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Lantai</span><b class="text-stone-800">Lantai ${esc(request.floor || '—')}</b></div>
+          ${request.roomNumber ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Kamar pilihan</span><b class="text-stone-800">Kamar ${esc(request.roomNumber)}</b></div>` : ''}
           <div class="flex justify-between gap-3"><span class="text-stone-500">Durasi</span><b class="text-stone-800">${esc(quote.period.label)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Periode</span><b class="text-stone-800 text-right">${formatDate(quote.start)} — ${formatDate(quote.end)}</b></div>
           ${request.car ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Parkir mobil</span><b class="text-stone-800">${rupiah(CAR_FEE)}/bulan</b></div>` : ''}
@@ -1125,6 +1139,15 @@ function bindLanding(root, catalog) {
       openBookingModal(catalog, {
         floor: button.dataset.bookFloor,
         periode: button.dataset.bookPeriod || '1',
+      }),
+    );
+  });
+
+  root.querySelectorAll('[data-book-room]').forEach((button) => {
+    button.addEventListener('click', () =>
+      openBookingModal(catalog, {
+        floor: button.dataset.bookFloor,
+        roomId: button.dataset.bookRoom,
       }),
     );
   });

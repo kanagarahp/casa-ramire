@@ -6,7 +6,7 @@
 export const APP_NAME = 'Casa Ramire';
 export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /** Flat monthly surcharge for tenants who bring a car. */
 export const CAR_FEE = 130000;
@@ -113,6 +113,23 @@ export const DEFAULT_PROMOS = [
   },
 ];
 
+/**
+ * Product/service master for the POS. Prices are samples and can be edited or
+ * removed by the owner from the POS menu.
+ */
+export const DEFAULT_POS_PRODUCTS = [
+  { name: 'Cuci Kering Setrika', category: 'Laundry', price: 7000, unit: 'kg', active: true },
+  { name: 'Cuci Kering', category: 'Laundry', price: 5000, unit: 'kg', active: true },
+  { name: 'Setrika Saja', category: 'Laundry', price: 4000, unit: 'kg', active: true },
+  { name: 'Bed Cover', category: 'Laundry', price: 25000, unit: 'pcs', active: true },
+  { name: 'Sepatu', category: 'Laundry', price: 20000, unit: 'pasang', active: true },
+  { name: 'Laundry Express 24 Jam', category: 'Laundry', price: 10000, unit: 'kg', active: true },
+  { name: 'Bersih Kamar', category: 'Kebersihan', price: 50000, unit: 'kali', active: true },
+  { name: 'Air Galon Isi Ulang', category: 'Lainnya', price: 20000, unit: 'galon', active: true },
+];
+
+export const DEFAULT_POS_CATEGORIES = ['Laundry', 'Kebersihan', 'Lainnya'];
+
 export const BOOKING_REQUEST_STATUS = {
   pending: { label: 'Menunggu', badge: 'badge-amber' },
   confirmed: { label: 'Dikonversi', badge: 'badge-green' },
@@ -164,10 +181,13 @@ export const DEFAULT_SETTINGS = {
   depositDefault: DEFAULT_DEPOSIT,
   catalogAdminKey: '',
   catalogPublishedAt: '',
+  paymentInstructions: '',
+  dokuEnabled: false,
 };
 
 export const NAV_ITEMS = [
   { path: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
+  { path: 'pos', label: 'POS / Kasir', icon: 'ShoppingCart' },
   { path: 'bookings', label: 'Booking Online', icon: 'Inbox' },
   { path: 'rooms', label: 'Status Kamar', icon: 'Building2' },
   { path: 'gallery', label: 'Galeri Landing', icon: 'Image' },
@@ -182,6 +202,7 @@ export const NAV_ITEMS = [
 
 export const PAGE_META = {
   dashboard: { title: 'Dashboard', subtitle: 'Ringkasan operasional properti' },
+  pos: { title: 'POS / Kasir', subtitle: 'Penjualan layanan dan produk properti' },
   bookings: { title: 'Booking Online', subtitle: 'Permintaan booking dari landing page' },
   rooms: { title: 'Status Kamar', subtitle: 'Inventaris dan okupansi kamar' },
   gallery: { title: 'Galeri Landing', subtitle: 'Foto yang tampil di halaman publik' },

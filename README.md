@@ -12,8 +12,9 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 
 | Modul | Kemampuan |
 | --- | --- |
-| **Landing Page** | Galeri foto properti (bukan katalog per kamar), statistik kamar tersedia/terisi/tersisa, pricelist per lantai, fasilitas, titik Google Maps, dan **booking online** |
-| **Booking Online** | Permintaan booking dari landing page: nama, WhatsApp, email, durasi, tanggal, kontak darurat, opsi bawa mobil (+Rp130.000/bln), dan kode promo |
+| **Landing Page** | Galeri foto properti (bukan katalog per kamar), jumlah & nomor kamar yang masih tersedia, pricelist per lantai, fasilitas, titik Google Maps, dan **booking online** |
+| **POS / Kasir** | Penjualan layanan (laundry, kebersihan, dll.), keranjang, diskon, metode bayar, kembalian, struk cetak, riwayat transaksi; master produk & harga dikelola owner |
+| **Booking Online** | Permintaan booking dari landing page: nama, WhatsApp, email, durasi, tanggal, kontak darurat, opsi bawa mobil (+Rp130.000/bln), kamar pilihan, dan kode promo |
 | **Dashboard** | KPI okupansi, antrean check-in, **Akan Berakhir** (≤ 7 hari), **Menunggak** (tagihan lewat jatuh tempo + lama tunggakan), arus kas 6 bulan, okupansi per lantai, tagihan aktif |
 | **Galeri Landing** | Unggah, ganti, hapus, dan urutkan foto galeri landing page; publikasi otomatis ke CDN foto katalog |
 | **Status Kamar** | 42 kamar (201–221, 301–321), filter lantai/status, pencarian, tampilan grid/daftar, tambah/hapus kamar, unggah foto kamar |
@@ -22,10 +23,10 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 | **Pricelist & Promo** | Tarif harian/mingguan/1/3/6/12 bulan per lantai, promo rupiah/persen, **kode promo sekali/multi pakai** |
 | **Add-On** | Layanan tambahan bulanan (parkir, kulkas, dispenser, dll.) |
 | **Penghuni** | Direktori, biodata + email, kontak darurat, **lama tinggal sejak check-in**, riwayat kamar/pindah, riwayat pembayaran + pembayaran terakhir, tunggakan |
-| **Financial** | Jurnal pengeluaran + kategori, invoice layanan untuk **tenant/non-tenant**, pendapatan accrual, laba rugi |
-| **Sewa & Kas** | Daftar tagihan, filter status, verifikasi/batal verifikasi pembayaran, pengingat WhatsApp, **link pembayaran DOKU + kirim tagihan ke email** |
-| **Pembayaran DOKU** | Link QRIS/VA/e-wallet per tagihan, invoice, dan perpanjangan; status lunas otomatis lewat webhook; perpanjangan otomatis setelah dibayar |
-| **Email Tagihan** | Kirim link pembayaran/tagihan ke email penghuni melalui Resend, dengan fallback ke aplikasi email perangkat |
+| **Financial** | Jurnal pengeluaran + kategori, invoice layanan untuk **tenant/non-tenant**, pendapatan POS, pendapatan accrual, laba rugi |
+| **Sewa & Kas** | Daftar tagihan, filter status, verifikasi/batal verifikasi pembayaran, pengingat WhatsApp, **kirim tagihan ke email penghuni** |
+| **Pembayaran DOKU** | Opsional dan nonaktif secara default. Jika diaktifkan: link QRIS/VA/e-wallet per tagihan/invoice/perpanjangan, status lunas otomatis lewat webhook |
+| **Email Tagihan** | Kirim rincian tagihan/invoice ke email penghuni melalui Resend tanpa perlu link DOKU, dengan fallback ke aplikasi email perangkat |
 | **Sinkronisasi** | State operasional dibagikan lewat `/api/state` agar status pembayaran dari webhook langsung terlihat di dashboard |
 | **Konten WA** | Editor template tagihan, invoice, pengingat; preview WhatsApp; variabel otomatis |
 | **Akun** | Manajemen pengguna khusus owner, role owner/staf, reset password, aktif/nonaktif |
@@ -48,16 +49,16 @@ memiliki satu tipe kamar, halaman ini **tidak menampilkan katalog per kamar**.
 Isinya:
 
 - galeri foto properti (hero + grid + lightbox),
-- statistik **total kamar, terisi, booking, dan tersisa** (live dari state),
-- daftar nomor kamar yang masih kosong per lantai,
+- jumlah **kamar tersedia** dan daftar nomor kamar yang masih kosong per lantai
+  (live dari state admin; klik nomor kamar untuk memilihnya saat booking),
 - pricelist per lantai untuk paket harian/mingguan/1/3/6/12 bulan,
 - fasilitas, deposit, dan titik Google Maps `casa ramire kost jogja`,
 - tombol WhatsApp, email properti (`casaramirejogja@gmail.com`), dan
   **form booking online**.
 
-Form booking berisi nama, WhatsApp, email, pekerjaan, lantai, durasi sewa,
-tanggal mulai, kontak darurat, catatan, **opsi membawa mobil (+Rp130.000/bln)**,
-dan **kode promo**. Estimasi total langsung dihitung dari pricelist yang
+Form booking berisi nama, WhatsApp, email, pekerjaan, lantai, **kamar pilihan
+(opsional)**, durasi sewa, tanggal mulai, kontak darurat, catatan,
+**opsi membawa mobil (+Rp130.000/bln)**, dan **kode promo**. Estimasi total langsung dihitung dari pricelist yang
 dipublikasikan. Setelah dikirim, calon penghuni menerima kode booking
 (`CRB-…`) dan admin dapat memprosesnya dari menu **Booking Online**.
 
@@ -107,14 +108,33 @@ POST /api/bookings              # kirim booking dari landing page
 GET/PATCH /api/bookings         # daftar & status booking (butuh kunci admin)
 ```
 
+## POS / Kasir
+
+Menu **POS / Kasir** dipakai untuk penjualan layanan di luar sewa, terutama
+laundry:
+
+- pilih produk/layanan dari grid, atur jumlah (mendukung desimal seperti kg),
+  diskon, metode bayar, uang diterima, dan kembalian;
+- simpan transaksi → tercatat di **Riwayat POS** dan langsung masuk ke laporan
+  pendapatan POS (laba rugi & arus kas);
+- struk dapat dilihat ulang dan dicetak;
+- **owner** dapat menambah, mengubah harga, menonaktifkan, atau menghapus
+  produk/layanan dari **Kelola Produk**. Staf tetap bisa memakai kasir.
+
+Produk contoh (laundry kiloan, bed cover, sepatu, bersih kamar, air galon)
+tersedia saat pertama kali dibuka dan bisa disesuaikan dengan tarif aktual.
+
 ## Email tagihan & link DOKU
 
-Tagihan sewa dan invoice layanan bisa dikirim langsung ke email penghuni:
+Tagihan sewa dan invoice layanan bisa dikirim langsung ke email penghuni tanpa
+link DOKU:
 
 1. Pastikan email penghuni terisi (form booking, check-in, atau detail penghuni).
 2. Dari **Sewa & Verifikasi Kas** atau **Financial → Invoice Manual**, klik
-   **Kirim Tagihan**. Aplikasi membuat link DOKU lalu mengirimkannya via email.
-3. Dari modal link pembayaran juga tersedia tombol **Kirim via Email**.
+   **Kirim Tagihan**. Aplikasi mengirim rincian tagihan, nominal, jatuh tempo,
+   dan instruksi pembayaran dari **Pengaturan → Pembayaran & tagihan email**.
+3. Pembayaran diverifikasi manual lewat tombol **Verifikasi** setelah bukti
+   transfer diterima.
 
 Pengiriman memakai [Resend](https://resend.com). Tambahkan environment:
 
@@ -126,10 +146,17 @@ EMAIL_FROM="Casa Ramire <no-reply@casaramire.com>"
 `EMAIL_FROM` harus memakai domain yang sudah diverifikasi di Resend. Email
 default properti (`casaramirejogja@gmail.com`) tetap dipakai sebagai alamat
 kontak di landing page. Jika `RESEND_API_KEY` belum diisi, tombol email akan
-membuka aplikasi email perangkat (mailto) sebagai fallback, sehingga link
-pembayaran tetap bisa dikirim manual.
+membuka aplikasi email perangkat (mailto) sebagai fallback.
 
-## Pembayaran DOKU otomatis
+Link pembayaran DOKU **nonaktif secara default**. Aktifkan di
+**Pengaturan → Pembayaran & tagihan email** hanya setelah akun/channel DOKU
+siap. Jika diaktifkan, email tagihan otomatis menyertakan link DOKU.
+
+## Pembayaran DOKU otomatis (opsional)
+
+Fitur ini **nonaktif secara default** karena akun/channel DOKU belum tentu
+siap. Aktifkan lewat **Pengaturan → Pembayaran & tagihan email** setelah akun
+DOKU terverifikasi.
 
 Aplikasi bisa membuat **link pembayaran DOKU Checkout** untuk:
 
@@ -254,9 +281,9 @@ api/
     └── notification.js        # webhook DOKU + auto-update status
 src/
 ├── core/            # konstanta, format, kriptografi, storage, store, router, seed
-├── services/        # logika bisnis (auth, properti, billing, pricing, laporan, katalog, galeri, booking, email, pembayaran, sinkronisasi, ...)
+├── services/        # logika bisnis (auth, properti, billing, pos, pricing, laporan, katalog, galeri, booking, email, pembayaran, sinkronisasi, ...)
 ├── ui/              # komponen bersama, modal, toast, ikon, helper DOM
-├── views/           # halaman dan modal per fitur (home.js, gallery.js, bookings.js, ...)
+├── views/           # halaman dan modal per fitur (home.js, pos.js, gallery.js, bookings.js, ...)
 ├── styles.css       # Tailwind v4 + design token Casa Ramire
 └── main.js          # bootstrap, routing, re-render
 tests/               # unit test format, kriptografi, harga, booking, promo, notifikasi
@@ -347,6 +374,10 @@ otomatis, sinkronisasi state, dan lupa password owner 27 Oktober 2026 ada di
 Pekerjaan galeri landing, booking online, kode promo, email tagihan, dan
 perbaikan invoice manual 28 Oktober 2026 ada di
 [`docs/HANDOFF-2026-10-28.md`](docs/HANDOFF-2026-10-28.md).
+
+Pekerjaan POS/kasir, email tagihan tanpa DOKU, dan penyederhanaan
+ketersediaan landing page 2 November 2026 ada di
+[`docs/HANDOFF-2026-11-02.md`](docs/HANDOFF-2026-11-02.md).
 
 ## Lisensi
 

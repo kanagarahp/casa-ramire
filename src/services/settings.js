@@ -11,7 +11,10 @@ const TEXT_FIELDS = [
   'mapsEmbedUrl',
   'facilities',
   'catalogAdminKey',
+  'paymentInstructions',
 ];
+
+const BOOLEAN_FIELDS = ['dokuEnabled'];
 
 function normalizeText(value) {
   return String(value ?? '').trim();
@@ -29,6 +32,11 @@ export function updateSettings(patch = {}) {
         draft.settings[field] = normalizeText(patch[field]);
       }
     }
+    for (const field of BOOLEAN_FIELDS) {
+      if (patch[field] !== undefined) {
+        draft.settings[field] = Boolean(patch[field]);
+      }
+    }
   });
 
   return getSettings();
@@ -44,4 +52,9 @@ export function getFacilities() {
 
 export function getAdminWhatsApp() {
   return String(getSettings().whatsapp || '').trim();
+}
+
+/** DOKU links are opt-in so billing email still works before activation. */
+export function isDokuEnabled() {
+  return Boolean(getSettings().dokuEnabled);
 }

@@ -4,6 +4,7 @@ import { getState } from '../core/store.js';
 import { createBill, createManualInvoice, verifyBill, verifyManualInvoice } from '../services/billing.js';
 import { sendInvoiceByEmail } from '../services/billing-notify.js';
 import { createInvoicePaymentLink, openPaymentLinkModal } from '../services/payments.js';
+import { isDokuEnabled } from '../services/settings.js';
 import { getTenants } from '../services/property.js';
 import { esc, setBusy } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -309,6 +310,7 @@ export function openManualInvoiceModal(preselectedRoomId = '') {
 /** Post-issue actions: create a DOKU link or email the bill directly. */
 export function openInvoiceIssuedModal(invoice) {
   if (!invoice) return;
+  const doku = isDokuEnabled();
   openModal({
     title: 'Invoice Diterbitkan',
     subtitle: `${invoice.number} • ${invoice.tenantName || '—'}`,
@@ -332,17 +334,25 @@ export function openInvoiceIssuedModal(invoice) {
             : `<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">Email belum diisi. Tambahkan email agar tagihan bisa dikirim langsung.</div>`
         }
         <div class="rounded-xl border border-line bg-white px-3 py-2.5 text-[11px] text-stone-600 leading-relaxed">
-          Pilih <b>Buat Link DOKU</b> untuk menyalin link pembayaran, atau <b>Kirim Tagihan</b> untuk membuat link dan mengirimkannya langsung ke email penerima.
+          ${
+            doku
+              ? 'Pilih <b>Buat Link DOKU</b> untuk menyalin link pembayaran, atau <b>Kirim Tagihan</b> untuk mengirimkannya langsung ke email penerima.'
+              : 'Klik <b>Kirim Tagihan</b> untuk mengirim rincian invoice ke email penerima. Link pembayaran DOKU belum diaktifkan.'
+          }
         </div>
       </div>
     `,
     footer: `
       <button type="button" class="btn-outline btn-sm" data-modal-close>Tutup</button>
-      <button type="button" class="btn-outline btn-sm" data-doku>${icon('CreditCard', 'w-4 h-4')} Buat Link DOKU</button>
-      <button type="button" class="btn-primary btn-sm" data-send>${icon('Send', 'w-4 h-4')} Kirim Tagihan</button>
+      ${doku ? `<button type="button" class="btn-outline btn-sm" data-doku>${icon('CreditCard', 'w-4 h-4')} Buat Link DOKU</button>` : ''}
+      <button type="button" class="btn-primary btn-sm" data-send ${invoice.email ? '' : 'disabled title="Email penerima belum diisi"'}>${icon('Send', 'w-4 h-4')} Kirim Tagihan</button>
     `,
     onMount(el, close) {
       el.querySelector('[data-doku]')?.addEventListener('click', async (event) => {
+        if (!isDokuEnabled()) {
+          toast('Link DOKU belum diaktifkan di Pengaturan.', 'warning');
+          return;
+        }
         const button = event.currentTarget;
         setBusy(button, true, 'Membuat link…');
         try {

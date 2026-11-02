@@ -18,11 +18,33 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await query('select data from casa_state where id = $1 limit 1', [STATE_ID]);
-    if (!result.rows.length) return sendJson(res, 200, { exists: false });
+    const result = await query('select data, updated_at from casa_state where id = $1 limit 1', [
+      STATE_ID,
+    ]);
 
-    const row = result.rows[0];
-    const state = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+    // If the operational state has never been synced, fall back to the latest
+    // published catalog so the landing page still reflects the admin's last
+    // published room statuses instead of showing seed data.
+    let source = 'state';
+    let state = null;
+    let updatedAt = null;
+
+    if (result.rows.length) {
+      const row = result.rows[0];
+      state = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+      updatedAt = row.updated_at || null;
+    } else {
+      const catalog = await query(
+        'select data, updated_at from casa_catalog where id = $1 limit 1',
+        [STATE_ID],
+      );
+      if (!catalog.rows.length) return sendJson(res, 200, { exists: false });
+      const row = catalog.rows[0];
+      state = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+      updatedAt = row.updated_at || null;
+      source = 'catalog';
+    }
+
     const rooms = (Array.isArray(state?.rooms) ? state.rooms : [])
       .map((room) => ({
         id: room.id,
@@ -34,6 +56,8 @@ export default async function handler(req, res) {
 
     return sendJson(res, 200, {
       exists: true,
+      source,
+      updatedAt,
       availability: {
         total: rooms.length,
         available: rooms.filter((room) => room.status === 'kosong').length,

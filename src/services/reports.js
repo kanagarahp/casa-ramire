@@ -15,7 +15,7 @@ export function getDashboardStats() {
   const vacant = rooms.filter((room) => room.status === 'kosong').length;
   const booking = rooms.filter((room) => room.status === 'booking').length;
 
-  const accrual = getAccrualReport();
+  const pnl = getProfitLoss();
   const outstandingBills = state.bills
     .filter((bill) => bill.status === 'unpaid')
     .reduce((sum, bill) => sum + toNumber(bill.amount - bill.paid), 0);
@@ -23,19 +23,16 @@ export function getDashboardStats() {
     .filter((invoice) => invoice.status === 'unpaid')
     .reduce((sum, invoice) => sum + toNumber(invoice.amount - invoice.paid), 0);
 
-  const monthExpenses = state.expenses
-    .filter((expense) => isInMonth(expense.date))
-    .reduce((sum, expense) => sum + toNumber(expense.amount), 0);
-
   return {
     total,
     occupied,
     vacant,
     booking,
     occupancy: total ? (occupied / total) * 100 : 0,
-    revenue: accrual.totalRecognized,
-    expenses: monthExpenses,
-    profit: accrual.totalRecognized - monthExpenses,
+    revenue: pnl.revenue,
+    expenses: pnl.expenses,
+    profit: pnl.net,
+    posRevenue: pnl.posRevenue,
     outstanding: outstandingBills + outstandingInvoices,
     expiring: getExpiringContracts(7),
     pendingRenewals: getPendingRenewals(),
@@ -225,6 +222,13 @@ export function getProfitLoss(reference = new Date()) {
     .filter((invoice) => invoice.status === 'paid' && isInMonth(invoice.paidAt, reference))
     .reduce((sum, invoice) => sum + toNumber(invoice.paid), 0);
 
+  const posRevenue = (state.posSales || [])
+    .filter(
+      (sale) =>
+        sale.status !== 'void' && isInMonth(sale.date || sale.createdAt, reference),
+    )
+    .reduce((sum, sale) => sum + toNumber(sale.total), 0);
+
   const expenses = state.expenses.filter((expense) => isInMonth(expense.date, reference));
   const expenseTotal = expenses.reduce((sum, expense) => sum + toNumber(expense.amount), 0);
 
@@ -235,11 +239,12 @@ export function getProfitLoss(reference = new Date()) {
   }, {});
 
   const rentRevenue = accrual.totalRecognized;
-  const revenue = rentRevenue + serviceRevenue;
+  const revenue = rentRevenue + serviceRevenue + posRevenue;
 
   return {
     rentRevenue,
     serviceRevenue,
+    posRevenue,
     revenue,
     expenses: expenseTotal,
     expenseByCategory: Object.entries(byCategory).sort((a, b) => b[1] - a[1]),
@@ -274,6 +279,12 @@ export function getCashflowTrend(months = 6, reference = new Date()) {
     if (invoice.status !== 'paid' || !invoice.paidAt) continue;
     const bucket = byKey.get(monthKey(invoice.paidAt));
     if (bucket) bucket.income += toNumber(invoice.paid);
+  }
+
+  for (const sale of state.posSales || []) {
+    if (sale.status === 'void') continue;
+    const bucket = byKey.get(monthKey(sale.date || sale.createdAt));
+    if (bucket) bucket.income += toNumber(sale.total);
   }
 
   for (const expense of state.expenses) {

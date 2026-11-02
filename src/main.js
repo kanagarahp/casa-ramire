@@ -10,6 +10,7 @@ import { toast } from './ui/toast.js';
 
 import * as homeView from './views/home.js';
 import * as dashboardView from './views/dashboard.js';
+import * as posView from './views/pos.js';
 import * as bookingsView from './views/bookings.js';
 import * as roomsView from './views/rooms.js';
 import * as galleryView from './views/gallery.js';
@@ -28,6 +29,7 @@ const app = document.getElementById('app');
 
 const VIEWS = {
   dashboard: dashboardView,
+  pos: posView,
   bookings: bookingsView,
   rooms: roomsView,
   gallery: galleryView,

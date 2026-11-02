@@ -1,6 +1,7 @@
 import {
   DEFAULT_ADDONS,
   DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_POS_PRODUCTS,
   DEFAULT_PRICING,
   DEFAULT_PROMOS,
   DEFAULT_SETTINGS,
@@ -60,6 +61,8 @@ export function buildSeedState() {
     expenseCategories: [...DEFAULT_EXPENSE_CATEGORIES],
     addons: withIds(DEFAULT_ADDONS),
     promos: withIds(DEFAULT_PROMOS),
+    posProducts: withIds(DEFAULT_POS_PRODUCTS),
+    posSales: [],
     pricing: structuredClone(DEFAULT_PRICING),
     templates: { ...DEFAULT_TEMPLATES },
     settings: { ...DEFAULT_SETTINGS },

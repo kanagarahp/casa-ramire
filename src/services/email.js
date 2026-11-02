@@ -1,4 +1,4 @@
-import { rupiah } from '../core/format.js';
+import { formatDate, rupiah } from '../core/format.js';
 import { getSettings } from './settings.js';
 
 function adminKey() {
@@ -84,19 +84,41 @@ function propertySignature() {
     .join('\n');
 }
 
-export function buildPaymentEmail({ name, title, invoiceNumber, amount, paymentUrl, expiresAt }) {
+/**
+ * Build a billing email. A payment URL is optional so bills can still be sent
+ * by email while the DOKU account is not active yet.
+ */
+export function buildBillingEmail({
+  name,
+  title,
+  invoiceNumber,
+  amount,
+  dueDate,
+  description,
+  paymentUrl,
+  expiresAt,
+  paymentInstructions,
+}) {
   const subject = `${title} — ${propertyName()}`;
+  const instructions = String(paymentInstructions || '').trim();
   const lines = [
     `Halo ${name || 'Kak'},`,
     '',
     `${title}${invoiceNumber ? ` (${invoiceNumber})` : ''}`,
+    description ? String(description) : null,
     `Nominal: ${rupiah(amount)}`,
+    dueDate ? `Jatuh tempo: ${formatDate(dueDate)}` : null,
     expiresAt ? `Berlaku sampai: ${expiresAt}` : null,
     '',
-    'Silakan lakukan pembayaran melalui link berikut:',
-    paymentUrl,
+    paymentUrl
+      ? 'Silakan lakukan pembayaran melalui link berikut:'
+      : instructions ||
+        'Silakan lakukan pembayaran melalui transfer bank atau QRIS. Setelah membayar, kirim bukti pembayaran ke admin Casa Ramire.',
+    paymentUrl || null,
     '',
-    'Status pembayaran akan diperbarui otomatis setelah pembayaran berhasil.',
+    paymentUrl
+      ? 'Status pembayaran akan diperbarui otomatis setelah pembayaran berhasil.'
+      : 'Pembayaran akan diverifikasi oleh admin. Simpan pesan ini sebagai bukti tagihan.',
     ...propertySignature().split('\n'),
   ];
 
@@ -106,13 +128,15 @@ export function buildPaymentEmail({ name, title, invoiceNumber, amount, paymentU
   };
 }
 
+export const buildPaymentEmail = buildBillingEmail;
+
 /**
- * Send a billing/payment link by email. When the email provider has not been
- * configured yet, fall back to the device's default mail client so the link is
+ * Send a bill/payment link by email. When the email provider has not been
+ * configured yet, fall back to the device's default mail client so the bill is
  * never lost.
  */
-export async function sendPaymentEmail(payload) {
-  const { subject, text } = buildPaymentEmail(payload);
+export async function sendBillingEmail(payload) {
+  const { subject, text } = buildBillingEmail(payload);
   try {
     await sendEmail({ to: payload.to, subject, text });
     return { sent: true, fallback: false };
@@ -124,3 +148,5 @@ export async function sendPaymentEmail(payload) {
     throw error;
   }
 }
+
+export const sendPaymentEmail = sendBillingEmail;

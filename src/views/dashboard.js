@@ -3,7 +3,7 @@ import { getBill } from '../services/billing.js';
 import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { clearRenewalPending } from '../services/property.js';
 import { getCashflowTrend, getDashboardStats } from '../services/reports.js';
-import { getSettings } from '../services/settings.js';
+import { getSettings, isDokuEnabled } from '../services/settings.js';
 import { buildMessage } from '../services/templates.js';
 import {
   avatar,
@@ -127,6 +127,7 @@ function overdueLabel(days) {
 }
 
 function overdueRows(entries) {
+  const doku = isDokuEnabled();
   if (!entries.length) {
     return emptyState({
       iconName: 'BadgeCheck',
@@ -158,7 +159,7 @@ function overdueRows(entries) {
             <div class="flex items-center gap-2 ml-auto">
               <span class="badge-red normal-case tracking-normal">${overdueLabel(daysOverdue)}</span>
               <a href="${waLink(tenant.phone, message)}" target="_blank" rel="noopener" class="btn-ghost btn-xs text-emerald-700" title="Kirim tagihan WhatsApp">${icon('MessageCircle', 'w-4 h-4')}</a>
-              <button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bills[0].id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>
+              ${doku ? `<button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bills[0].id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>` : ''}
               <button type="button" class="btn-primary btn-xs" data-action="verify-overdue" data-id="${bills[0].id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
             </div>
           </div>`;
@@ -251,10 +252,10 @@ export function render(root) {
       ${
         !settings.catalogAdminKey
           ? `<div class="card border-amber-200 bg-amber-50 p-4 mb-6 flex flex-wrap items-center gap-3">
-              <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">${icon('CreditCard', 'w-5 h-5')}</span>
+              <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">${icon('Send', 'w-5 h-5')}</span>
               <div class="min-w-0 flex-1">
-                <p class="text-sm font-extrabold text-amber-900">Aktifkan pembayaran DOKU otomatis</p>
-                <p class="text-xs text-amber-800 mt-0.5">Masukkan kunci admin sekali di Pengaturan agar sinkronisasi dan tombol Link DOKU aktif.</p>
+                <p class="text-sm font-extrabold text-amber-900">Aktifkan sinkronisasi &amp; email tagihan</p>
+                <p class="text-xs text-amber-800 mt-0.5">Masukkan kunci admin sekali di Pengaturan agar data tersinkron ke landing page dan tagihan bisa dikirim ke email penghuni.</p>
               </div>
               <button type="button" class="btn-gold btn-sm" data-action="open-settings">${icon('Settings', 'w-4 h-4')} Buka Pengaturan</button>
             </div>`
@@ -322,7 +323,7 @@ export function render(root) {
 
       <div class="grid lg:grid-cols-2 gap-6 mb-6">
         <div class="card overflow-hidden">
-          ${cardHeader({ title: 'Arus Kas 6 Bulan', description: 'Kas masuk dari tagihan & invoice dibanding pengeluaran' })}
+          ${cardHeader({ title: 'Arus Kas 6 Bulan', description: 'Kas masuk dari tagihan, invoice & POS dibanding pengeluaran' })}
           <div class="p-5">${cashflowChart(trend)}</div>
         </div>
         <div class="card overflow-hidden">
@@ -420,6 +421,10 @@ export function render(root) {
     if (action === 'detail') openTenantDetail(Number(target.dataset.tenant));
     if (action === 'tenant-booking') openBookingModal(Number(target.dataset.room), 'edit_booking');
     if (action === 'doku-link') {
+      if (!isDokuEnabled()) {
+        toast('Link DOKU belum diaktifkan. Aktifkan di Pengaturan setelah akun DOKU siap.', 'warning');
+        return;
+      }
       const bill = getBill(Number(target.dataset.id));
       if (!bill) return;
       const message = buildMessage('tagihan', {

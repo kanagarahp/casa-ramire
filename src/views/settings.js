@@ -145,8 +145,8 @@ export function openSettingsModal() {
               <div class="rounded-xl border border-line bg-cream/60 p-3">
                 <label class="label" for="set-catalog-key">Kunci admin (katalog, sinkronisasi &amp; pembayaran)</label>
                 <input id="set-catalog-key" type="password" class="input" value="${esc(settings.catalogAdminKey || '')}" placeholder="Masukkan kunci dari owner" autocomplete="off" />
-                <p class="hint mt-1">Kunci ini hanya disimpan di perangkat ini. Dipakai untuk publikasi katalog, sinkronisasi data, dan membuat link pembayaran DOKU. Jangan bagikan.</p>
-                <p class="hint mt-1">Setelah kunci diisi, data akan disinkronkan otomatis dan status pembayaran DOKU diperbarui tanpa input manual.</p>
+                <p class="hint mt-1">Kunci ini hanya disimpan di perangkat ini. Dipakai untuk publikasi katalog, sinkronisasi data, email tagihan, dan (jika diaktifkan) link pembayaran DOKU. Jangan bagikan.</p>
+                <p class="hint mt-1">Setelah kunci diisi, data akan disinkronkan otomatis ke landing page dan tombol Kirim Tagihan dapat memakai email.</p>
               </div>
 
               <div class="flex flex-wrap items-center gap-2">
@@ -162,6 +162,29 @@ export function openSettingsModal() {
                 Tips: tambahkan foto di menu <b>Galeri Landing</b>, lalu klik Publikasikan. Foto yang sudah terbit otomatis dilepas
                 dari penyimpanan lokal agar kuota browser tetap lega.
               </p>
+            </form>
+          `,
+        })}
+
+        ${section({
+          iconName: 'Send',
+          title: 'Pembayaran & tagihan email',
+          description: 'Tagihan dapat dikirim ke email penghuni tanpa link DOKU.',
+          body: `
+            <form id="settings-payment-form" class="space-y-3">
+              <div>
+                <label class="label" for="set-payment-instructions">Instruksi pembayaran di email</label>
+                <textarea id="set-payment-instructions" rows="3" class="input" placeholder="cth: Transfer BCA 1234567890 a.n. Casa Ramire, lalu kirim bukti ke WhatsApp admin.">${esc(settings.paymentInstructions || '')}</textarea>
+                <p class="hint mt-1">Dikirim bersama tagihan. Jika kosong, email memakai instruksi umum (transfer bank/QRIS dan konfirmasi ke admin).</p>
+              </div>
+              <label class="flex items-start gap-3 rounded-xl border border-line bg-cream/60 p-3 cursor-pointer">
+                <input id="set-doku-enabled" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" ${settings.dokuEnabled ? 'checked' : ''} />
+                <span>
+                  <span class="block text-xs font-bold text-stone-800">Aktifkan link pembayaran DOKU</span>
+                  <span class="block text-[11px] text-stone-600 mt-0.5">Biarkan nonaktif selama akun/channel DOKU belum siap. Tagihan tetap bisa dikirim lewat email.</span>
+                </span>
+              </label>
+              <button type="submit" class="btn-primary btn-sm">${icon('Save', 'w-4 h-4')} Simpan pengaturan pembayaran</button>
             </form>
           `,
         })}
@@ -239,6 +262,16 @@ export function openSettingsModal() {
         event.preventDefault();
         saveCatalogProfile();
         toast('Profil landing page berhasil disimpan.');
+      });
+
+      const paymentForm = el.querySelector('#settings-payment-form');
+      paymentForm?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        updateSettings({
+          paymentInstructions: el.querySelector('#set-payment-instructions').value,
+          dokuEnabled: el.querySelector('#set-doku-enabled').checked,
+        });
+        toast('Pengaturan pembayaran berhasil disimpan.');
       });
 
       el.querySelector('[data-action="publish-catalog"]')?.addEventListener('click', async (event) => {

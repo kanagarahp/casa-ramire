@@ -30,6 +30,8 @@ function migrate(stored) {
     'expenseCategories',
     'addons',
     'promos',
+    'posProducts',
+    'posSales',
   ]) {
     if (!Array.isArray(merged[key])) merged[key] = base[key];
   }
@@ -79,6 +81,50 @@ function migrate(stored) {
         ? { ...addon, name: 'Parkir Mobil', price: CAR_FEE }
         : addon,
     );
+  }
+
+  // v6: POS product master and sale history. Older saves receive the sample
+  // laundry products so the cashier is usable immediately.
+  merged.posProducts = merged.posProducts.map((product, index) => ({
+    ...product,
+    id: product.id ?? index + 1,
+    name: String(product.name || '').trim(),
+    category: String(product.category || 'Lainnya').trim(),
+    price: Math.max(0, Number(product.price) || 0),
+    unit: String(product.unit || '').trim(),
+    active: product.active !== false,
+    createdAt: product.createdAt || '',
+  }));
+
+  merged.posSales = merged.posSales.map((sale, index) => ({
+    ...sale,
+    id: sale.id ?? index + 1,
+    number: sale.number || `POS/${sale.date || ''}/${String(index + 1).padStart(4, '0')}`,
+    date: sale.date || '',
+    items: Array.isArray(sale.items) ? sale.items : [],
+    subtotal: Math.max(0, Number(sale.subtotal) || 0),
+    discount: Math.max(0, Number(sale.discount) || 0),
+    total: Math.max(0, Number(sale.total) || 0),
+    method: sale.method || 'Tunai / Cash',
+    amountPaid: Math.max(0, Number(sale.amountPaid) || 0),
+    change: Math.max(0, Number(sale.change) || 0),
+    customerName: sale.customerName || '',
+    customerPhone: sale.customerPhone || '',
+    customerEmail: sale.customerEmail || '',
+    note: sale.note || '',
+    status: sale.status || 'paid',
+    createdAt: sale.createdAt || '',
+  }));
+
+  // v6: email billing can run without DOKU; payment instructions are
+  // configurable and DOKU links stay off until the account is active.
+  if (storedVersion < 6) {
+    if (typeof merged.settings.paymentInstructions !== 'string') {
+      merged.settings.paymentInstructions = base.settings.paymentInstructions;
+    }
+    if (typeof merged.settings.dokuEnabled !== 'boolean') {
+      merged.settings.dokuEnabled = base.settings.dokuEnabled;
+    }
   }
 
   // v5: tenants and active bookings store an email address for billing.
@@ -185,6 +231,7 @@ export function resetOperationalData() {
     draft.manualInvoices = [];
     draft.expenses = [];
     draft.expenseCategories = fresh.expenseCategories;
+    draft.posSales = [];
     // preserve configuration + auth
     draft.users = current.users;
     draft.session = current.session;

@@ -22,6 +22,7 @@ import {
 } from '../services/property.js';
 import { createRenewalPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { computeQuote, getDepositDefault, getPromo, getPromos } from '../services/pricing.js';
+import { isDokuEnabled } from '../services/settings.js';
 import { esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { openModal } from '../ui/modal.js';
@@ -289,7 +290,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
     footer: `
       <button type="button" class="btn-outline btn-sm" data-modal-close>Batal</button>
       ${
-        isExtend
+        isExtend && isDokuEnabled()
           ? `<button type="button" class="btn-gold btn-sm" data-doku-extend>${icon('CreditCard', 'w-4 h-4')} Buat Link DOKU</button>`
           : ''
       }
@@ -437,6 +438,10 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
       });
 
       el.querySelector('[data-doku-extend]')?.addEventListener('click', async () => {
+        if (!isDokuEnabled()) {
+          toast('Link DOKU belum diaktifkan di Pengaturan.', 'warning');
+          return;
+        }
         const quote = renderSummary();
         if (!quote) return;
 
