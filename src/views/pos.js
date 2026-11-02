@@ -1,6 +1,9 @@
 import { PAYMENT_METHODS } from '../core/constants.js';
-import { formatDateTime, rupiah, toNumber, todayISO } from '../core/format.js';
+import { addDays, formatDate, formatDateTime, rupiah, toNumber, todayISO } from '../core/format.js';
+import { getState } from '../core/store.js';
 import { isOwner } from '../services/auth.js';
+import { sendInvoiceByEmail } from '../services/billing-notify.js';
+import { isValidEmail } from '../services/email.js';
 import {
   createPosSale,
   deletePosProduct,
@@ -14,23 +17,32 @@ import {
   togglePosProduct,
 } from '../services/pos.js';
 import { getSettings } from '../services/settings.js';
-import { emptyState, pageHeader, statCard } from '../ui/components.js';
+import { billBadge, emptyState, pageHeader, statCard } from '../ui/components.js';
 import { delegate, esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { openInvoiceIssuedModal, openVerifyModal } from './billing-modals.js';
 
 let activeTab = 'kasir';
 let searchTerm = '';
 let categoryFilter = 'semua';
 let cart = [];
 let draft = {
+  customerMode: 'tenant',
+  tenantId: '',
+  roomId: '',
+  roomNumber: '',
   customerName: '',
   customerPhone: '',
+  customerEmail: '',
   note: '',
   method: 'Tunai / Cash',
   discount: '',
   amountPaid: '',
+  paymentMode: 'later',
+  dueDate: addDays(todayISO(), 7),
+  sendEmail: true,
 };
 
 function money(value) {
@@ -82,19 +94,76 @@ function cartTotals() {
   };
 }
 
+function tenantEntries() {
+  const state = getState();
+  const tenantsById = new Map(
+    (state.tenants || []).map((tenant) => [String(tenant.id), tenant]),
+  );
+  return (state.rooms || [])
+    .filter((room) => room.tenantId && tenantsById.get(String(room.tenantId))?.status === 'aktif')
+    .map((room) => ({ room, tenant: tenantsById.get(String(room.tenantId)) }))
+    .sort((a, b) =>
+      String(a.room.nomor).localeCompare(String(b.room.nomor), undefined, { numeric: true }),
+    );
+}
+
+function applyTenant(entry) {
+  if (!entry) return;
+  draft.tenantId = entry.tenant.id;
+  draft.roomId = entry.room.id;
+  draft.roomNumber = entry.room.nomor;
+  draft.customerName = entry.tenant.name || '';
+  draft.customerPhone = entry.tenant.phone || '';
+  draft.customerEmail = entry.tenant.email || '';
+}
+
+function resolveTenantEntry() {
+  const entries = tenantEntries();
+  if (!entries.length) return null;
+  return (
+    entries.find((entry) => String(entry.tenant.id) === String(draft.tenantId)) ||
+    entries[0]
+  );
+}
+
 function syncDraftFromInputs(scope) {
-  const name = scope.querySelector('#pos-customer-name');
-  const phone = scope.querySelector('#pos-customer-phone');
   const note = scope.querySelector('#pos-note');
   const method = scope.querySelector('#pos-method');
   const discount = scope.querySelector('#pos-discount');
   const paid = scope.querySelector('#pos-paid');
-  if (name) draft.customerName = name.value;
-  if (phone) draft.customerPhone = phone.value;
+  const dueDate = scope.querySelector('#pos-due-date');
+  const sendEmail = scope.querySelector('#pos-send-email');
+  const mode = scope.querySelector('input[name="pos-customer-mode"]:checked')?.value;
+  const payment = scope.querySelector('input[name="pos-payment-mode"]:checked')?.value;
+
+  draft.customerMode = mode === 'tenant' ? 'tenant' : 'non-tenant';
+  draft.paymentMode = payment === 'now' ? 'now' : 'later';
   if (note) draft.note = note.value;
   if (method) draft.method = method.value;
   if (discount) draft.discount = discount.value;
   if (paid) draft.amountPaid = paid.value;
+  if (dueDate) draft.dueDate = dueDate.value;
+  if (sendEmail) draft.sendEmail = sendEmail.checked && !sendEmail.disabled;
+
+  if (draft.customerMode === 'tenant') {
+    const select = scope.querySelector('#pos-tenant-select');
+    const entry =
+      tenantEntries().find(
+        (item) => String(item.tenant.id) === String(select?.value || draft.tenantId),
+      ) || resolveTenantEntry();
+    applyTenant(entry);
+    return;
+  }
+
+  draft.tenantId = '';
+  draft.roomId = '';
+  draft.roomNumber = '';
+  const name = scope.querySelector('#pos-customer-name');
+  const phone = scope.querySelector('#pos-customer-phone');
+  const email = scope.querySelector('#pos-customer-email');
+  if (name) draft.customerName = name.value;
+  if (phone) draft.customerPhone = phone.value;
+  if (email) draft.customerEmail = email.value;
 }
 
 function cartLinesHtml() {
@@ -156,9 +225,14 @@ function totalsHtml() {
       ${totals.discount > 0 ? `<div class="flex justify-between gap-3 text-rose-700"><span>Diskon</span><span class="font-bold">−${money(totals.discount)}</span></div>` : ''}
       <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-extrabold text-stone-700">Total</span><span class="font-black text-lg text-stone-900">${money(totals.total)}</span></div>
       ${
-        draft.amountPaid !== ''
+        draft.paymentMode === 'now' && draft.amountPaid !== ''
           ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Uang diterima</span><span class="font-bold text-stone-800">${money(totals.paid)}</span></div>
              <div class="flex justify-between gap-3"><span class="text-stone-500">Kembalian</span><span class="font-bold ${totals.shortfall ? 'text-rose-700' : 'text-emerald-700'}">${totals.shortfall ? `Kurang ${money(totals.shortfall)}` : money(totals.change)}</span></div>`
+          : ''
+      }
+      ${
+        draft.paymentMode === 'later'
+          ? `<div class="flex justify-between gap-3 text-amber-800"><span>Status</span><span class="font-bold">Belum dibayar</span></div>`
           : ''
       }
     </div>
@@ -228,6 +302,18 @@ function categoryChips() {
 
 function kasirHtml() {
   const owner = isOwner();
+  const tenants = tenantEntries();
+  const mode = tenants.length ? draft.customerMode : 'non-tenant';
+  if (mode !== draft.customerMode) {
+    draft.customerMode = mode;
+    if (!tenants.length) draft.paymentMode = 'now';
+  }
+  const tenantEntry = resolveTenantEntry();
+  if (mode === 'tenant' && tenantEntry) applyTenant(tenantEntry);
+  const paymentMode = draft.paymentMode === 'now' ? 'now' : 'later';
+  const knownEmail = mode === 'tenant' ? tenantEntry?.tenant.email || '' : draft.customerEmail;
+  const hasEmail = isValidEmail(knownEmail);
+
   return `
     <div class="grid lg:grid-cols-[1.3fr_0.7fr] gap-5 items-start">
       <div class="space-y-4 min-w-0">
@@ -270,15 +356,103 @@ function kasirHtml() {
         <div class="py-3" id="pos-cart-lines">${cartLinesHtml()}</div>
 
         <div class="space-y-3 pt-3 border-t border-line">
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="label" for="pos-customer-name">Nama pelanggan</label>
-              <input id="pos-customer-name" type="text" class="input input-sm" placeholder="Opsional" value="${esc(draft.customerName)}" />
+          <div class="rounded-2xl border border-line bg-stone-50/60 p-3 space-y-2.5">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">Pelanggan</p>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="flex items-center gap-2 cursor-pointer rounded-xl border border-line bg-white p-2.5 hover:bg-stone-50 ${tenants.length ? '' : 'opacity-50'}">
+                <input type="radio" name="pos-customer-mode" value="tenant" class="accent-brand" ${mode === 'tenant' ? 'checked' : ''} ${tenants.length ? '' : 'disabled'} />
+                <span class="text-xs font-bold text-stone-700">Penghuni</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer rounded-xl border border-line bg-white p-2.5 hover:bg-stone-50">
+                <input type="radio" name="pos-customer-mode" value="non-tenant" class="accent-brand" ${mode === 'non-tenant' ? 'checked' : ''} />
+                <span class="text-xs font-bold text-stone-700">Non tenant</span>
+              </label>
             </div>
-            <div>
-              <label class="label" for="pos-customer-phone">No. telepon</label>
-              <input id="pos-customer-phone" type="tel" class="input input-sm" placeholder="Opsional" value="${esc(draft.customerPhone)}" />
+
+            ${
+              mode === 'tenant'
+                ? `
+                  <div>
+                    <label class="label" for="pos-tenant-select">Kamar / penghuni</label>
+                    <select id="pos-tenant-select" class="select">
+                      ${tenants
+                        .map(
+                          (entry) =>
+                            `<option value="${entry.tenant.id}" ${String(entry.tenant.id) === String(tenantEntry?.tenant.id) ? 'selected' : ''}>Kamar ${esc(entry.room.nomor)} — ${esc(entry.tenant.name)}</option>`,
+                        )
+                        .join('')}
+                    </select>
+                  </div>
+                  <div class="rounded-xl border border-line bg-white px-3 py-2.5 text-[11px] space-y-1">
+                    <div class="flex justify-between gap-2"><span class="text-stone-500">Nama</span><b class="text-stone-800 text-right">${esc(tenantEntry?.tenant.name || '—')}</b></div>
+                    <div class="flex justify-between gap-2"><span class="text-stone-500">Email</span><b class="text-stone-800 text-right break-all">${esc(tenantEntry?.tenant.email || 'belum diisi')}</b></div>
+                    <div class="flex justify-between gap-2"><span class="text-stone-500">Telepon</span><b class="text-stone-800 text-right">${esc(tenantEntry?.tenant.phone || '—')}</b></div>
+                  </div>
+                `
+                : `
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="label" for="pos-customer-name">Nama pelanggan</label>
+                      <input id="pos-customer-name" type="text" class="input input-sm" placeholder="Opsional" value="${esc(draft.customerName)}" />
+                    </div>
+                    <div>
+                      <label class="label" for="pos-customer-phone">No. telepon</label>
+                      <input id="pos-customer-phone" type="tel" class="input input-sm" placeholder="Opsional" value="${esc(draft.customerPhone)}" />
+                    </div>
+                  </div>
+                  <div>
+                    <label class="label" for="pos-customer-email">Email</label>
+                    <input id="pos-customer-email" type="email" class="input input-sm" placeholder="nama@email.com (opsional)" value="${esc(draft.customerEmail)}" />
+                  </div>
+                `
+            }
+
+            <label class="flex items-start gap-2.5 rounded-xl border border-line bg-white p-2.5 cursor-pointer ${hasEmail ? '' : 'opacity-60'}">
+              <input id="pos-send-email" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" ${draft.sendEmail && hasEmail ? 'checked' : ''} ${hasEmail ? '' : 'disabled'} />
+              <span>
+                <span class="block text-[11px] font-bold text-stone-700">Kirim invoice ke email pelanggan</span>
+                <span class="block text-[10px] text-stone-500 mt-0.5" id="pos-email-hint">${hasEmail ? esc(knownEmail) : 'Email belum tersedia. Lengkapi dulu di profil penghuni atau isi email non tenant.'}</span>
+              </span>
+            </label>
+          </div>
+
+          <div class="rounded-2xl border border-line bg-stone-50/60 p-3 space-y-2.5">
+            <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">Pembayaran</p>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="flex items-center gap-2 cursor-pointer rounded-xl border border-line bg-white p-2.5 hover:bg-stone-50">
+                <input type="radio" name="pos-payment-mode" value="now" class="accent-brand" ${paymentMode === 'now' ? 'checked' : ''} />
+                <span class="text-xs font-bold text-stone-700">Lunas sekarang</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer rounded-xl border border-line bg-white p-2.5 hover:bg-stone-50">
+                <input type="radio" name="pos-payment-mode" value="later" class="accent-brand" ${paymentMode === 'later' ? 'checked' : ''} />
+                <span class="text-xs font-bold text-stone-700">Belum dibayar</span>
+              </label>
             </div>
+
+            ${
+              paymentMode === 'now'
+                ? `
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="label" for="pos-method">Metode bayar</label>
+                      <select id="pos-method" class="select">
+                        ${PAYMENT_METHODS.map((method) => `<option value="${esc(method)}" ${draft.method === method ? 'selected' : ''}>${esc(method)}</option>`).join('')}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label" for="pos-paid">Uang diterima (opsional)</label>
+                      <input id="pos-paid" type="number" min="0" step="1000" class="input input-sm" placeholder="Uang pas" value="${esc(draft.amountPaid)}" />
+                    </div>
+                  </div>
+                `
+                : `
+                  <div>
+                    <label class="label" for="pos-due-date">Jatuh tempo invoice</label>
+                    <input id="pos-due-date" type="date" class="input input-sm" value="${esc(draft.dueDate || addDays(todayISO(), 7))}" />
+                  </div>
+                  <p class="text-[10px] text-amber-800 leading-relaxed">Invoice akan tersimpan di profil penghuni/kamar sebagai tunggakan sampai pembayaran diverifikasi.</p>
+                `
+            }
           </div>
 
           <div class="grid grid-cols-2 gap-2">
@@ -287,29 +461,17 @@ function kasirHtml() {
               <input id="pos-discount" type="number" min="0" step="500" class="input input-sm" placeholder="0" value="${esc(draft.discount)}" />
             </div>
             <div>
-              <label class="label" for="pos-method">Metode bayar</label>
-              <select id="pos-method" class="select select-sm">
-                ${PAYMENT_METHODS.map((method) => `<option value="${esc(method)}" ${draft.method === method ? 'selected' : ''}>${esc(method)}</option>`).join('')}
-              </select>
+              <label class="label" for="pos-note">Catatan</label>
+              <input id="pos-note" type="text" class="input input-sm" placeholder="cth: antar jam 5 sore" value="${esc(draft.note)}" />
             </div>
-          </div>
-
-          <div>
-            <label class="label" for="pos-paid">Uang diterima (opsional)</label>
-            <input id="pos-paid" type="number" min="0" step="1000" class="input input-sm" placeholder="Kosongkan = uang pas" value="${esc(draft.amountPaid)}" />
-          </div>
-
-          <div>
-            <label class="label" for="pos-note">Catatan</label>
-            <input id="pos-note" type="text" class="input input-sm" placeholder="cth: antar jam 5 sore" value="${esc(draft.note)}" />
           </div>
 
           <div class="rounded-2xl border border-line bg-cream/70 p-3" id="pos-totals">${totalsHtml()}</div>
 
           <button type="button" class="btn-primary w-full py-3" data-pos-checkout ${cartLines().length ? '' : 'disabled'}>
-            ${icon('Check', 'w-4 h-4')} Simpan Pembayaran
+            ${paymentMode === 'now' ? `${icon('Check', 'w-4 h-4')} Simpan Pembayaran` : `${icon('FilePlus2', 'w-4 h-4')} Terbitkan Invoice`}
           </button>
-          <p class="text-[10px] text-stone-500 text-center">Transaksi langsung tercatat sebagai pendapatan POS.</p>
+          <p class="text-[10px] text-stone-500 text-center">${paymentMode === 'now' ? 'Transaksi langsung tercatat sebagai pendapatan POS.' : 'Invoice belum dihitung sebagai pendapatan sampai dibayar.'}</p>
         </div>
       </aside>
     </div>
@@ -323,11 +485,12 @@ function historyHtml() {
 
   return `
     <div class="space-y-5">
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
         ${statCard({ label: 'Transaksi Hari Ini', value: summary.todayCount, iconName: 'ReceiptText', hint: money(summary.todayRevenue) })}
         ${statCard({ label: 'Pendapatan Hari Ini', value: money(summary.todayRevenue), iconName: 'Wallet', tone: 'green' })}
         ${statCard({ label: 'Transaksi Bulan Ini', value: summary.monthCount, iconName: 'ShoppingCart', hint: money(summary.monthRevenue) })}
         ${statCard({ label: 'Pendapatan POS Bulan Ini', value: money(summary.monthRevenue), iconName: 'Coins', tone: 'brand' })}
+        ${statCard({ label: 'Tunggakan POS', value: money(summary.monthOutstanding), iconName: 'CircleAlert', tone: summary.monthOutstanding ? 'rose' : 'default', hint: `${summary.unpaidCount} invoice belum dibayar` })}
       </div>
 
       <div class="card overflow-hidden">
@@ -340,7 +503,7 @@ function historyHtml() {
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>No. Struk</th><th>Waktu</th><th>Pelanggan</th><th>Item</th><th>Metode</th><th>Total</th><th class="text-right">Aksi</th></tr></thead>
+            <thead><tr><th>No. Struk</th><th>Waktu</th><th>Pelanggan</th><th>Item</th><th>Metode</th><th>Total</th><th>Status</th><th class="text-right">Aksi</th></tr></thead>
             <tbody>
               ${
                 sales.length
@@ -361,7 +524,16 @@ function historyHtml() {
                             <td><span class="badge-gray normal-case tracking-normal">${esc(sale.method || '—')}</span></td>
                             <td class="font-black text-stone-800 whitespace-nowrap">${money(sale.total)}</td>
                             <td>
+                              ${billBadge(sale.status === 'paid' ? 'paid' : 'unpaid')}
+                              ${sale.status !== 'paid' && sale.dueDate ? `<p class="text-[10px] text-rose-700 mt-0.5 whitespace-nowrap">s/d ${formatDate(sale.dueDate)}</p>` : ''}
+                            </td>
+                            <td>
                               <div class="flex items-center justify-end gap-1">
+                                ${
+                                  sale.status !== 'paid' && sale.invoiceId
+                                    ? `<button type="button" class="btn-primary btn-xs" data-pos-verify data-invoice="${sale.invoiceId}">${icon('ShieldCheck', 'w-3 h-3')} Tandai Lunas</button>`
+                                    : ''
+                                }
                                 <button type="button" class="btn-ghost btn-xs" data-pos-detail data-sale="${sale.id}" title="Lihat struk">${icon('ReceiptText', 'w-3.5 h-3.5')}</button>
                                 ${owner ? `<button type="button" class="btn-ghost btn-xs text-rose-600" data-pos-delete-sale data-sale="${sale.id}" title="Hapus transaksi">${icon('Trash2', 'w-3.5 h-3.5')}</button>` : ''}
                               </div>
@@ -369,7 +541,7 @@ function historyHtml() {
                           </tr>`;
                       })
                       .join('')
-                  : `<tr><td colspan="7" class="px-4 py-12 text-center text-sm text-stone-600">Belum ada transaksi POS. Mulai dari tab Kasir.</td></tr>`
+                  : `<tr><td colspan="8" class="px-4 py-12 text-center text-sm text-stone-600">Belum ada transaksi POS. Mulai dari tab Kasir.</td></tr>`
               }
             </tbody>
           </table>
@@ -399,12 +571,19 @@ function paint(scope) {
 function resetCheckout() {
   cart = [];
   draft = {
+    ...draft,
+    tenantId: '',
+    roomId: '',
+    roomNumber: '',
     customerName: '',
     customerPhone: '',
+    customerEmail: '',
     note: '',
     method: 'Tunai / Cash',
     discount: '',
     amountPaid: '',
+    dueDate: addDays(todayISO(), 7),
+    sendEmail: true,
   };
 }
 
@@ -422,6 +601,9 @@ function receiptBodyHtml(sale) {
         <div class="flex justify-between gap-2"><span>Tanggal</span><span>${formatDateTime(sale.createdAt || sale.date)}</span></div>
         <div class="flex justify-between gap-2"><span>Kasir</span><span>${esc(sale.cashier || '—')}</span></div>
         <div class="flex justify-between gap-2"><span>Pelanggan</span><span>${esc(sale.customerName || 'Walk-in')}</span></div>
+        ${sale.roomNumber ? `<div class="flex justify-between gap-2"><span>Kamar</span><span>${esc(sale.roomNumber)}</span></div>` : ''}
+        <div class="flex justify-between gap-2"><span>Status</span><b class="${sale.status === 'paid' ? 'text-emerald-700' : 'text-rose-700'}">${sale.status === 'paid' ? 'Lunas' : 'Belum dibayar'}</b></div>
+        ${sale.status !== 'paid' && sale.dueDate ? `<div class="flex justify-between gap-2"><span>Jatuh tempo</span><span>${formatDate(sale.dueDate)}</span></div>` : ''}
       </div>
       <div class="py-3 border-b border-dashed border-stone-300 space-y-2">
         ${(sale.items || [])
@@ -441,8 +623,12 @@ function receiptBodyHtml(sale) {
         <div class="flex justify-between gap-2"><span>Subtotal</span><span>${money(sale.subtotal)}</span></div>
         ${sale.discount > 0 ? `<div class="flex justify-between gap-2"><span>Diskon</span><span>−${money(sale.discount)}</span></div>` : ''}
         <div class="flex justify-between gap-2 font-black text-sm text-stone-900 pt-1 border-t border-stone-300"><span>Total</span><span>${money(sale.total)}</span></div>
-        <div class="flex justify-between gap-2"><span>${esc(sale.method || 'Bayar')}</span><span>${money(sale.amountPaid)}</span></div>
-        <div class="flex justify-between gap-2"><span>Kembalian</span><span>${money(sale.change)}</span></div>
+        ${
+          sale.status === 'paid'
+            ? `<div class="flex justify-between gap-2"><span>${esc(sale.method || 'Bayar')}</span><span>${money(sale.amountPaid)}</span></div>
+               <div class="flex justify-between gap-2"><span>Kembalian</span><span>${money(sale.change)}</span></div>`
+            : `<div class="flex justify-between gap-2 text-rose-700"><span>Belum dibayar</span><span>${money(sale.total)}</span></div>`
+        }
       </div>
       ${sale.note ? `<p class="border-t border-dashed border-stone-300 pt-2 text-[10px] text-stone-600">Catatan: ${esc(sale.note)}</p>` : ''}
       <p class="text-center text-[10px] text-stone-500 pt-3">Terima kasih sudah menggunakan layanan kami.</p>
@@ -463,6 +649,9 @@ function receiptPrintBody(sale) {
     <div class="row"><span>Tanggal</span><span>${formatDateTime(sale.createdAt || sale.date)}</span></div>
     <div class="row"><span>Kasir</span><span>${esc(sale.cashier || '—')}</span></div>
     <div class="row"><span>Pelanggan</span><span>${esc(sale.customerName || 'Walk-in')}</span></div>
+    ${sale.roomNumber ? `<div class="row"><span>Kamar</span><span>${esc(sale.roomNumber)}</span></div>` : ''}
+    <div class="row"><span>Status</span><span class="bold">${sale.status === 'paid' ? 'LUNAS' : 'BELUM DIBAYAR'}</span></div>
+    ${sale.status !== 'paid' && sale.dueDate ? `<div class="row"><span>Jatuh tempo</span><span>${formatDate(sale.dueDate)}</span></div>` : ''}
     <div class="line"></div>
     ${(sale.items || [])
       .map(
@@ -477,8 +666,12 @@ function receiptPrintBody(sale) {
     <div class="row"><span>Subtotal</span><span>${money(sale.subtotal)}</span></div>
     ${sale.discount > 0 ? `<div class="row"><span>Diskon</span><span>−${money(sale.discount)}</span></div>` : ''}
     <div class="row total"><span>Total</span><span>${money(sale.total)}</span></div>
-    <div class="row"><span>${esc(sale.method || 'Bayar')}</span><span>${money(sale.amountPaid)}</span></div>
-    <div class="row"><span>Kembalian</span><span>${money(sale.change)}</span></div>
+    ${
+      sale.status === 'paid'
+        ? `<div class="row"><span>${esc(sale.method || 'Bayar')}</span><span>${money(sale.amountPaid)}</span></div>
+           <div class="row"><span>Kembalian</span><span>${money(sale.change)}</span></div>`
+        : `<div class="row"><span>Belum dibayar</span><span>${money(sale.total)}</span></div>`
+    }
     ${sale.note ? `<div class="line"></div><div class="muted">Catatan: ${esc(sale.note)}</div>` : ''}
     <div class="line"></div>
     <div class="center muted">Terima kasih sudah menggunakan layanan kami.</div>
@@ -513,19 +706,24 @@ function printReceipt(sale) {
 }
 
 function openReceipt(sale, { fresh = false } = {}) {
+  const paid = sale.status === 'paid';
   openModal({
-    title: fresh ? 'Pembayaran Berhasil' : `Struk ${sale.number || 'POS'}`,
+    title: fresh
+      ? paid
+        ? 'Pembayaran Berhasil'
+        : 'Invoice POS Diterbitkan'
+      : `${paid ? 'Struk' : 'Invoice'} ${sale.number || 'POS'}`,
     subtitle: `${sale.customerName || 'Walk-in'} • ${money(sale.total)}`,
     size: 'md',
     body: `
       <div class="space-y-4">
         ${
           fresh
-            ? `<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 flex items-start gap-3">
-                <span class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">${icon('CheckCircle2', 'w-5 h-5')}</span>
+            ? `<div class="rounded-2xl border ${paid ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'} p-4 flex items-start gap-3">
+                <span class="w-10 h-10 rounded-xl ${paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'} flex items-center justify-center shrink-0">${icon(paid ? 'CheckCircle2' : 'FilePlus2', 'w-5 h-5')}</span>
                 <div>
-                  <p class="text-sm font-extrabold text-emerald-900">Transaksi tersimpan</p>
-                  <p class="text-[11px] text-emerald-800 mt-0.5">Pendapatan POS sudah masuk ke laporan keuangan.</p>
+                  <p class="text-sm font-extrabold ${paid ? 'text-emerald-900' : 'text-amber-900'}">${paid ? 'Transaksi tersimpan' : 'Invoice tersimpan sebagai tunggakan'}</p>
+                  <p class="text-[11px] ${paid ? 'text-emerald-800' : 'text-amber-800'} mt-0.5">${paid ? 'Pendapatan POS sudah masuk ke laporan keuangan.' : 'Tagihan akan tetap terbuka sampai pembayaran diverifikasi.'}</p>
                 </div>
               </div>`
             : ''
@@ -819,7 +1017,57 @@ export function render(root) {
     syncDraftFromInputs(scope);
   });
 
-  delegate(scope, 'click', '[data-pos-checkout]', () => {
+  delegate(scope, 'input', '#pos-customer-email', () => {
+    syncDraftFromInputs(scope);
+    const checkbox = scope.querySelector('#pos-send-email');
+    const hint = scope.querySelector('#pos-email-hint');
+    const hasEmail = isValidEmail(draft.customerEmail);
+    if (checkbox) {
+      checkbox.disabled = !hasEmail;
+      if (!hasEmail) checkbox.checked = false;
+    }
+    if (hint) {
+      hint.textContent = hasEmail
+        ? draft.customerEmail
+        : 'Email belum tersedia. Lengkapi dulu di profil penghuni atau isi email non tenant.';
+    }
+  });
+
+  delegate(scope, 'change', '#pos-send-email', () => {
+    syncDraftFromInputs(scope);
+  });
+
+  delegate(scope, 'change', 'input[name="pos-customer-mode"]', (event, target) => {
+    syncDraftFromInputs(scope);
+    if (target.value === 'tenant') {
+      draft.paymentMode = 'later';
+    } else {
+      draft.tenantId = '';
+      draft.roomId = '';
+      draft.roomNumber = '';
+      draft.customerName = '';
+      draft.customerPhone = '';
+      draft.customerEmail = '';
+      draft.paymentMode = 'now';
+    }
+    paint(scope);
+  });
+
+  delegate(scope, 'change', '#pos-tenant-select', () => {
+    syncDraftFromInputs(scope);
+    paint(scope);
+  });
+
+  delegate(scope, 'change', 'input[name="pos-payment-mode"]', () => {
+    syncDraftFromInputs(scope);
+    paint(scope);
+  });
+
+  delegate(scope, 'change', '#pos-due-date', () => {
+    syncDraftFromInputs(scope);
+  });
+
+  delegate(scope, 'click', '[data-pos-checkout]', async () => {
     syncDraftFromInputs(scope);
     const totals = cartTotals();
     if (!totals.lines.length) {
@@ -827,7 +1075,21 @@ export function render(root) {
       return;
     }
 
+    const tenantEntry = draft.customerMode === 'tenant' ? resolveTenantEntry() : null;
+    if (draft.customerMode === 'tenant' && !tenantEntry) {
+      toast('Belum ada penghuni aktif. Pilih non tenant atau tambahkan penghuni dulu.', 'warning');
+      return;
+    }
+
+    const email = tenantEntry?.tenant.email || draft.customerEmail;
+    const shouldEmail = Boolean(draft.sendEmail);
+    if (shouldEmail && !isValidEmail(email)) {
+      toast('Email pelanggan belum valid. Isi email atau hapus centang kirim email.', 'warning');
+      return;
+    }
+
     try {
+      const isPaid = draft.paymentMode !== 'later';
       const sale = createPosSale({
         items: totals.lines.map((line) => ({
           productId: line.product.id,
@@ -836,15 +1098,46 @@ export function render(root) {
         discount: draft.discount,
         method: draft.method,
         amountPaid: draft.amountPaid,
-        customerName: draft.customerName,
-        customerPhone: draft.customerPhone,
+        customerName: tenantEntry?.tenant.name || draft.customerName,
+        customerPhone: tenantEntry?.tenant.phone || draft.customerPhone,
+        customerEmail: email,
+        tenantId: tenantEntry?.tenant.id || null,
+        roomId: tenantEntry?.room.id || null,
+        roomNumber: tenantEntry?.room.nomor || '',
         note: draft.note,
         date: todayISO(),
+        status: isPaid ? 'paid' : 'unpaid',
+        dueDate: draft.dueDate,
+        withInvoice: shouldEmail || undefined,
       });
+
       resetCheckout();
       paint(scope);
-      openReceipt(sale, { fresh: true });
-      toast('Transaksi POS berhasil disimpan.');
+
+      if (isPaid) {
+        openReceipt(sale, { fresh: true });
+        toast('Pembayaran POS berhasil disimpan.');
+      } else if (sale.invoice) {
+        openInvoiceIssuedModal(sale.invoice);
+        toast('Invoice POS berhasil diterbitkan.');
+      } else {
+        openReceipt(sale, { fresh: true });
+        toast('Invoice POS berhasil diterbitkan.');
+      }
+
+      if (shouldEmail && sale.invoice) {
+        try {
+          const { delivery } = await sendInvoiceByEmail(sale.invoice);
+          toast(
+            delivery.sent
+              ? `Invoice dikirim ke ${email}.`
+              : 'Email belum dikonfigurasi. Aplikasi email perangkat dibuka sebagai gantinya.',
+            delivery.sent ? 'success' : 'warning',
+          );
+        } catch (error) {
+          toast(`Invoice tersimpan, tetapi email gagal dikirim: ${error.message}`, 'error');
+        }
+      }
     } catch (error) {
       toast(error.message, 'error');
     }
@@ -857,6 +1150,15 @@ export function render(root) {
   delegate(scope, 'click', '[data-pos-detail]', (event, target) => {
     const sale = getPosSales().find((item) => String(item.id) === String(target.dataset.sale));
     if (sale) openReceipt(sale);
+  });
+
+  delegate(scope, 'click', '[data-pos-verify]', (event, target) => {
+    const invoiceId = Number(target.dataset.invoice);
+    if (!invoiceId) {
+      toast('Invoice terkait tidak ditemukan.', 'error');
+      return;
+    }
+    openVerifyModal({ kind: 'invoice', id: invoiceId });
   });
 
   delegate(scope, 'click', '[data-pos-delete-sale]', async (event, target) => {

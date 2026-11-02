@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { buildSeedState } from '../src/core/seed.js';
 import { getState, replaceState } from '../src/core/store.js';
+import { verifyManualInvoice } from '../src/services/billing.js';
 import { buildBillingEmail } from '../src/services/email.js';
 import {
   createPosSale,
@@ -12,6 +13,7 @@ import {
   getPosSummary,
   savePosProduct,
 } from '../src/services/pos.js';
+import { checkInDirect, getOutstandingForTenant } from '../src/services/property.js';
 import { getCashflowTrend, getProfitLoss } from '../src/services/reports.js';
 
 function fresh() {
@@ -134,6 +136,50 @@ test('older saves receive POS defaults while keeping existing data', () => {
   assert.deepEqual(migrated.posSales, []);
   assert.equal(migrated.settings.dokuEnabled, false);
   assert.equal(typeof migrated.settings.paymentInstructions, 'string');
+});
+
+test('POS tenant invoice becomes an unpaid receivable and verification updates the sale', () => {
+  fresh();
+  const tenant = checkInDirect(1, {
+    name: 'Lita',
+    phone: '081234567891',
+    email: 'lita@example.com',
+    periode: '1',
+    startDate: '2026-11-01',
+    depositEnabled: false,
+    payOption: 'full',
+  });
+  const product = getPosProducts().find((item) => item.name === 'Cuci Kering Setrika');
+
+  const sale = createPosSale({
+    items: [{ productId: product.id, qty: 2 }],
+    status: 'unpaid',
+    tenantId: tenant.id,
+    roomId: 1,
+    dueDate: '2026-11-09',
+    customerEmail: tenant.email,
+  });
+
+  assert.equal(sale.status, 'unpaid');
+  assert.ok(sale.invoice);
+  assert.equal(sale.invoice.status, 'unpaid');
+  assert.equal(sale.invoice.tenantName, 'Lita');
+  assert.equal(sale.invoice.roomNumber, '201');
+  assert.equal(sale.invoice.source, 'pos');
+  assert.equal(sale.invoice.posSaleId, sale.id);
+  assert.equal(getOutstandingForTenant(tenant.id), sale.total);
+  assert.equal(getPosRevenue(), 0);
+
+  verifyManualInvoice(sale.invoice.id, { method: 'Tunai / Cash', note: 'Dibayar 2 hari kemudian' });
+
+  const updatedSale = getState().posSales.find((item) => item.id === sale.id);
+  const updatedTenant = getState().tenants.find((item) => item.id === tenant.id);
+  assert.equal(updatedSale.status, 'paid');
+  assert.equal(getPosRevenue(), sale.total);
+  assert.equal(getOutstandingForTenant(tenant.id), 0);
+  assert.ok(
+    updatedTenant.payments.some((payment) => String(payment.invoiceId) === String(sale.invoice.id)),
+  );
 });
 
 test('billing email works without a DOKU link', () => {

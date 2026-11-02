@@ -253,16 +253,62 @@ export function createManualInvoice({
   return created;
 }
 
+function linkedPosSale(draft, invoice) {
+  if (!invoice) return null;
+  return (draft.posSales || []).find(
+    (sale) =>
+      (invoice.posSaleId && String(sale.id) === String(invoice.posSaleId)) ||
+      (sale.invoiceId && String(sale.invoiceId) === String(invoice.id)),
+  );
+}
+
+function pushManualInvoicePayment(draft, invoice, { method, note, paidAt }) {
+  if (!invoice.tenantId) return;
+  const tenant = draft.tenants.find(
+    (item) => String(item.id) === String(invoice.tenantId),
+  );
+  if (!tenant) return;
+  tenant.payments = tenant.payments || [];
+  const exists = tenant.payments.some(
+    (payment) => String(payment.invoiceId) === String(invoice.id),
+  );
+  if (exists) return;
+  tenant.payments.push({
+    id: nextId(tenant.payments),
+    date: todayISO(),
+    amount: toNumber(invoice.amount),
+    type: invoice.source === 'pos' ? `POS — ${invoice.item}` : `Invoice — ${invoice.item}`,
+    method,
+    note: note || invoice.number,
+    invoiceId: invoice.id,
+    createdAt: paidAt,
+  });
+}
+
 export function verifyManualInvoice(id, { method = 'Virtual Account BCA', note = '' } = {}) {
   update((draft) => {
     const invoice = draft.manualInvoices.find((item) => String(item.id) === String(id));
     if (!invoice) throw new Error('Invoice tidak ditemukan.');
     if (invoice.status === 'paid') return;
+    const now = new Date().toISOString();
     invoice.paid = invoice.amount;
+    invoice.amountPaid = invoice.amount;
+    invoice.change = 0;
     invoice.status = 'paid';
-    invoice.paidAt = new Date().toISOString();
+    invoice.paidAt = now;
     invoice.method = method;
     invoice.note = note;
+
+    const sale = linkedPosSale(draft, invoice);
+    if (sale) {
+      sale.status = 'paid';
+      sale.paidAt = now;
+      sale.method = method;
+      sale.amountPaid = toNumber(invoice.amount);
+      sale.change = 0;
+    }
+
+    pushManualInvoicePayment(draft, invoice, { method, note, paidAt: now });
   });
 }
 
@@ -271,14 +317,47 @@ export function markManualInvoiceUnpaid(id) {
     const invoice = draft.manualInvoices.find((item) => String(item.id) === String(id));
     if (!invoice) return;
     invoice.paid = 0;
+    invoice.amountPaid = 0;
+    invoice.change = 0;
     invoice.status = 'unpaid';
     invoice.paidAt = null;
     invoice.method = '';
+
+    const sale = linkedPosSale(draft, invoice);
+    if (sale) {
+      sale.status = 'unpaid';
+      sale.paidAt = null;
+      sale.amountPaid = 0;
+      sale.change = 0;
+      sale.method = '';
+    }
+
+    for (const tenant of draft.tenants || []) {
+      tenant.payments = (tenant.payments || []).filter(
+        (payment) =>
+          String(payment.invoiceId) !== String(invoice.id) &&
+          String(payment.billId) !== String(invoice.id),
+      );
+    }
   });
 }
 
 export function deleteManualInvoice(id) {
   update((draft) => {
+    const invoice = draft.manualInvoices.find((item) => String(item.id) === String(id));
+    const sale = linkedPosSale(draft, invoice);
+    if (sale) {
+      draft.posSales = (draft.posSales || []).filter(
+        (item) => String(item.id) !== String(sale.id),
+      );
+    }
+    for (const tenant of draft.tenants || []) {
+      tenant.payments = (tenant.payments || []).filter(
+        (payment) =>
+          String(payment.invoiceId) !== String(id) &&
+          String(payment.billId) !== String(id),
+      );
+    }
     draft.manualInvoices = draft.manualInvoices.filter((item) => String(item.id) !== String(id));
   });
 }

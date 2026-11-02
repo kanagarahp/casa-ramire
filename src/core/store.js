@@ -111,9 +111,25 @@ function migrate(stored) {
     customerName: sale.customerName || '',
     customerPhone: sale.customerPhone || '',
     customerEmail: sale.customerEmail || '',
+    tenantId: sale.tenantId ?? null,
+    roomNumber: sale.roomNumber || '',
     note: sale.note || '',
-    status: sale.status || 'paid',
+    status: sale.status === 'unpaid' ? 'unpaid' : 'paid',
+    dueDate: sale.dueDate || '',
+    invoiceId: sale.invoiceId ?? null,
+    invoiceNumber: sale.invoiceNumber || '',
+    paidAt: sale.paidAt || (sale.status === 'paid' ? sale.createdAt || '' : null),
     createdAt: sale.createdAt || '',
+  }));
+
+  // v7: POS invoices may be linked to a tenant and paid later. The manual
+  // invoice is the receivable record; the POS sale keeps the cashier receipt.
+  merged.manualInvoices = merged.manualInvoices.map((invoice) => ({
+    source: 'manual',
+    items: [],
+    posSaleId: null,
+    ...invoice,
+    items: Array.isArray(invoice.items) ? invoice.items : [],
   }));
 
   // v6: email billing can run without DOKU; payment instructions are

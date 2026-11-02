@@ -219,13 +219,20 @@ export function getProfitLoss(reference = new Date()) {
   const accrual = getAccrualReport();
 
   const serviceRevenue = state.manualInvoices
-    .filter((invoice) => invoice.status === 'paid' && isInMonth(invoice.paidAt, reference))
+    .filter(
+      (invoice) =>
+        invoice.source !== 'pos' &&
+        invoice.status === 'paid' &&
+        isInMonth(invoice.paidAt, reference),
+    )
     .reduce((sum, invoice) => sum + toNumber(invoice.paid), 0);
 
+  // POS invoices are mirrored in manualInvoices for receivables, but the POS
+  // sale is the revenue ledger (avoids double counting).
   const posRevenue = (state.posSales || [])
     .filter(
       (sale) =>
-        sale.status !== 'void' && isInMonth(sale.date || sale.createdAt, reference),
+        sale.status === 'paid' && isInMonth(sale.date || sale.createdAt, reference),
     )
     .reduce((sum, sale) => sum + toNumber(sale.total), 0);
 
@@ -276,14 +283,15 @@ export function getCashflowTrend(months = 6, reference = new Date()) {
   }
 
   for (const invoice of state.manualInvoices) {
+    if (invoice.source === 'pos') continue;
     if (invoice.status !== 'paid' || !invoice.paidAt) continue;
     const bucket = byKey.get(monthKey(invoice.paidAt));
     if (bucket) bucket.income += toNumber(invoice.paid);
   }
 
   for (const sale of state.posSales || []) {
-    if (sale.status === 'void') continue;
-    const bucket = byKey.get(monthKey(sale.date || sale.createdAt));
+    if (sale.status !== 'paid') continue;
+    const bucket = byKey.get(monthKey(sale.paidAt || sale.date || sale.createdAt));
     if (bucket) bucket.income += toNumber(sale.total);
   }
 

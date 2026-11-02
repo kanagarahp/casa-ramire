@@ -13,7 +13,7 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 | Modul | Kemampuan |
 | --- | --- |
 | **Landing Page** | Galeri foto properti (bukan katalog per kamar), jumlah & nomor kamar yang masih tersedia, pricelist per lantai, fasilitas, titik Google Maps, dan **booking online** |
-| **POS / Kasir** | Penjualan layanan (laundry, kebersihan, dll.), keranjang, diskon, metode bayar, kembalian, struk cetak, riwayat transaksi; master produk & harga dikelola owner |
+| **POS / Kasir** | Penjualan layanan (laundry, kebersihan, dll.) untuk **penghuni atau non tenant**, keranjang, diskon, bayar sekarang atau **invoice/tunggakan**, kirim email, struk cetak, riwayat transaksi; master produk & harga dikelola owner |
 | **Booking Online** | Permintaan booking dari landing page: nama, WhatsApp, email, durasi, tanggal, kontak darurat, opsi bawa mobil (+Rp130.000/bln), kamar pilihan, dan kode promo |
 | **Dashboard** | KPI okupansi, antrean check-in, **Akan Berakhir** (≤ 7 hari), **Menunggak** (tagihan lewat jatuh tempo + lama tunggakan), arus kas 6 bulan, okupansi per lantai, tagihan aktif |
 | **Galeri Landing** | Unggah, ganti, hapus, dan urutkan foto galeri landing page; publikasi otomatis ke CDN foto katalog |
@@ -113,11 +113,17 @@ GET/PATCH /api/bookings         # daftar & status booking (butuh kunci admin)
 Menu **POS / Kasir** dipakai untuk penjualan layanan di luar sewa, terutama
 laundry:
 
+- pilih **Penghuni** (nomor kamar → nama/email/telepon otomatis) atau
+  **Non tenant**;
 - pilih produk/layanan dari grid, atur jumlah (mendukung desimal seperti kg),
   diskon, metode bayar, uang diterima, dan kembalian;
-- simpan transaksi → tercatat di **Riwayat POS** dan langsung masuk ke laporan
-  pendapatan POS (laba rugi & arus kas);
-- struk dapat dilihat ulang dan dicetak;
+- pilih **Lunas sekarang** atau **Belum dibayar**:
+  - belum dibayar → invoice tersimpan di profil penghuni/kamar sebagai
+    tunggakan dan di **Financial → Invoice Manual**,
+  - pembayaran dapat diverifikasi belakangan dari **Riwayat POS** atau
+    **Financial**; status POS ikut berubah menjadi lunas;
+- invoice dapat langsung dikirim ke email penghuni saat dibuat;
+- struk/invoice dapat dilihat ulang dan dicetak;
 - **owner** dapat menambah, mengubah harga, menonaktifkan, atau menghapus
   produk/layanan dari **Kelola Produk**. Staf tetap bisa memakai kasir.
 
