@@ -198,6 +198,17 @@ function migrate(stored) {
   merged.settings.carDailyFee =
     Number.isFinite(carDailyFee) && carDailyFee >= 0 ? carDailyFee : CAR_DAILY_FEE;
 
+  // v10: bank transfer details for landing-page bookings and billing emails.
+  if (!String(merged.settings.bankName || '').trim()) {
+    merged.settings.bankName = 'Bank Mandiri';
+  }
+  if (!String(merged.settings.bankAccountNumber || '').trim()) {
+    merged.settings.bankAccountNumber = '700013745877';
+  }
+  if (!String(merged.settings.bankAccountName || '').trim()) {
+    merged.settings.bankAccountName = 'ERNY KURNIAWATI';
+  }
+
   // v5: tenants and active bookings store an email address for billing.
   // v8: deposits are tracked separately from rent payments. `deposit` is the
   // refundable target, `depositPaid` is cash received, and `depositRefunded`
@@ -211,23 +222,37 @@ function migrate(stored) {
     ...tenant,
     depositHistory: Array.isArray(tenant.depositHistory) ? tenant.depositHistory : [],
   }));
-  merged.rooms = merged.rooms.map((room) =>
-    room.booking
-      ? {
-          ...room,
-          booking: {
-            email: '',
-            depositPaid: 0,
-            depositRefunded: 0,
-            depositHistory: [],
-            ...room.booking,
-            depositHistory: Array.isArray(room.booking.depositHistory)
-              ? room.booking.depositHistory
-              : [],
-          },
-        }
-      : room,
-  );
+  merged.rooms = merged.rooms.map((room) => {
+    if (!room.booking) return room;
+    const booking = {
+      email: '',
+      depositPaid: 0,
+      depositRefunded: 0,
+      depositHistory: [],
+      ...room.booking,
+      depositHistory: Array.isArray(room.booking.depositHistory)
+        ? room.booking.depositHistory
+        : [],
+    };
+    const paidInFull = booking.payOption === 'full';
+    booking.paymentStatus =
+      booking.paymentStatus === 'paid'
+        ? 'paid'
+        : booking.paymentStatus === 'unpaid'
+          ? 'unpaid'
+          : paidInFull
+            ? 'paid'
+            : 'unpaid';
+    booking.amountPaid = Math.max(
+      0,
+      Number(booking.amountPaid) ||
+        (booking.paymentStatus === 'paid' ? Number(booking.grandTotal) || 0 : 0),
+    );
+    booking.paidAt = booking.paidAt || null;
+    booking.paymentMethod =
+      booking.paymentMethod || (booking.paymentStatus === 'paid' ? 'Transfer Bank Mandiri' : '');
+    return { ...room, booking };
+  });
 
   // Keep the public WhatsApp number filled for saves created before the
   // landing page existed (empty string would otherwise override the default).

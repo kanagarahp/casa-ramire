@@ -6,7 +6,7 @@
 export const APP_NAME = 'Casa Ramire';
 export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 /** Flat monthly surcharge for tenants who bring a car. */
 export const CAR_FEE = 130000;
@@ -58,10 +58,7 @@ export const PERIODS = [
 export const PERIOD_KEYS = PERIODS.map((p) => p.key);
 
 export const PAYMENT_METHODS = [
-  'Virtual Account BCA',
-  'Virtual Account Mandiri',
-  'QRIS All Payment',
-  'Transfer Bank',
+  'Transfer Bank Mandiri',
   'Tunai / Cash',
 ];
 
@@ -176,9 +173,9 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
 
 export const DEFAULT_TEMPLATES = {
   tagihan:
-    'Halo Kak {nama} 👋\n\nBerikut tagihan sewa Kamar {kamar} Casa Ramire sebesar *{nominal}* (jatuh tempo: {jatuh_tempo}).\n\nPembayaran dapat dilakukan via VA / QRIS. Terima kasih!',
+    'Halo Kak {nama} 👋\n\nBerikut tagihan sewa Kamar {kamar} Casa Ramire sebesar *{nominal}* (jatuh tempo: {jatuh_tempo}).\n\nPembayaran dapat dilakukan via transfer Bank Mandiri. Terima kasih!',
   manual:
-    'Halo Kak {nama} (Kamar {kamar}) 👋\n\nTerbit invoice layanan #{no_invoice} untuk *{item_layanan}* sebesar *{nominal}*.\n\nMohon dapat dibayarkan via VA / QRIS. Terima kasih!',
+    'Halo Kak {nama} (Kamar {kamar}) 👋\n\nTerbit invoice layanan #{no_invoice} untuk *{item_layanan}* sebesar *{nominal}*.\n\nMohon dapat dibayarkan via transfer Bank Mandiri. Terima kasih!',
   reminder:
     'PENGINGAT SEWA CASA RAMIRE ⚠️\n\nHalo Kak {nama}, sewa Kamar {kamar} Anda berakhir pada *{jatuh_tempo}*. Total tagihan *{nominal}*.\n\nSilakan lakukan perpanjangan agar kamar tetap nyaman untuk Anda. Terima kasih!',
 };
@@ -211,6 +208,9 @@ export const DEFAULT_SETTINGS = {
   depositDefault: DEFAULT_DEPOSIT,
   parkingCapacity: MAX_PARKING_CARS,
   carDailyFee: CAR_DAILY_FEE,
+  bankName: 'Bank Mandiri',
+  bankAccountNumber: '700013745877',
+  bankAccountName: 'ERNY KURNIAWATI',
   catalogAdminKey: '',
   catalogPublishedAt: '',
   paymentInstructions: '',

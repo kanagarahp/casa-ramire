@@ -252,6 +252,12 @@ export function saveBooking(roomId, payload) {
           ].filter(Boolean)
         : [],
       payOption: quote.payOption,
+      paymentStatus: quote.payOption === 'full' ? 'paid' : 'unpaid',
+      amountPaid:
+        quote.payOption === 'full' ? quote.grandTotal + quote.deposit : 0,
+      paidAt: quote.payOption === 'full' ? new Date().toISOString() : null,
+      paymentMethod: quote.payOption === 'full' ? 'Transfer Bank Mandiri' : '',
+      paymentNote: '',
       payNow: quote.payNow,
       remaining: quote.remaining,
       monthlyCharge: quote.monthlyCharge,
@@ -337,9 +343,29 @@ export function moveBooking(roomId, targetRoomId) {
       addonTotal: quote.addonTotal,
       grandTotal: quote.grandTotal,
       deposit: quote.deposit,
-      depositPaid,
+      depositPaid:
+        booking.paymentStatus === 'paid' || booking.payOption === 'full'
+          ? quote.deposit
+          : depositPaid,
       depositHistory: Array.isArray(booking.depositHistory) ? booking.depositHistory : [],
       payOption: quote.payOption,
+      paymentStatus:
+        booking.paymentStatus === 'paid' || booking.payOption === 'full'
+          ? 'paid'
+          : 'unpaid',
+      amountPaid:
+        booking.paymentStatus === 'paid' || booking.payOption === 'full'
+          ? quote.grandTotal + quote.deposit
+          : 0,
+      paidAt:
+        booking.paymentStatus === 'paid' || booking.payOption === 'full'
+          ? booking.paidAt || new Date().toISOString()
+          : null,
+      paymentMethod:
+        booking.paymentStatus === 'paid' || booking.payOption === 'full'
+          ? booking.paymentMethod || 'Transfer Bank Mandiri'
+          : '',
+      paymentNote: booking.paymentNote || '',
       payNow: quote.payNow,
       remaining: quote.remaining,
       monthlyCharge: quote.monthlyCharge,
@@ -357,6 +383,71 @@ export function moveBooking(roomId, targetRoomId) {
   });
 
   return getRoom(targetRoomId);
+}
+
+/** Confirm that a booking's rent + deposit has been received. */
+export function verifyBookingPayment(roomId, { method = 'Transfer Bank Mandiri', note = '' } = {}) {
+  const room = getRoom(roomId);
+  must(room?.booking, 'Booking tidak ditemukan.');
+  if (room.booking.paymentStatus === 'paid') return room;
+
+  update((draft) => {
+    const target = draft.rooms.find((item) => String(item.id) === String(roomId));
+    const booking = target.booking;
+    const deposit = Math.max(0, toNumber(booking.deposit));
+    const total = Math.max(0, toNumber(booking.grandTotal)) + deposit;
+    const now = new Date().toISOString();
+    const history = Array.isArray(booking.depositHistory) ? [...booking.depositHistory] : [];
+
+    if (deposit > 0 && !history.some((entry) => String(entry.note || '').toLowerCase().includes('deposit booking'))) {
+      const entry = depositHistoryEntry(deposit, {
+        note: 'Deposit booking',
+        date: todayISO(),
+        method,
+      });
+      if (entry) history.push(entry);
+    }
+
+    booking.payOption = 'full';
+    booking.paymentStatus = 'paid';
+    booking.amountPaid = total;
+    booking.payNow = total;
+    booking.remaining = 0;
+    booking.depositPaid = deposit;
+    booking.depositHistory = history;
+    booking.paidAt = now;
+    booking.paymentMethod = method;
+    booking.paymentNote = String(note || '').trim();
+    booking.updatedAt = now;
+  });
+
+  return getRoom(roomId);
+}
+
+/** Revert a booking payment confirmation (e.g. wrong transfer). */
+export function markBookingPaymentUnpaid(roomId) {
+  const room = getRoom(roomId);
+  must(room?.booking, 'Booking tidak ditemukan.');
+
+  update((draft) => {
+    const target = draft.rooms.find((item) => String(item.id) === String(roomId));
+    const booking = target.booking;
+    booking.payOption = 'partial';
+    booking.paymentStatus = 'unpaid';
+    booking.amountPaid = 0;
+    booking.payNow = 0;
+    booking.remaining = Math.max(0, toNumber(booking.grandTotal));
+    booking.depositPaid = 0;
+    booking.depositHistory = (booking.depositHistory || []).filter(
+      (entry) => !String(entry.note || '').toLowerCase().includes('deposit booking'),
+    );
+    booking.paidAt = null;
+    booking.paymentMethod = '';
+    booking.paymentNote = '';
+    booking.updatedAt = new Date().toISOString();
+  });
+
+  return getRoom(roomId);
 }
 
 /* ------------------------------------------------------------------ */
@@ -549,8 +640,12 @@ export function checkInFromBooking(roomId, { settle = true } = {}) {
       : null,
   };
 
-  const alreadyPaid = booking.payOption === 'full' ? booking.grandTotal : 0;
+  const bookingPaid =
+    booking.paymentStatus === 'paid' || booking.payOption === 'full';
+  const alreadyPaid = bookingPaid ? toNumber(booking.grandTotal) : 0;
   const rentPaid = settle ? quote.grandTotal : alreadyPaid;
+  const depositPaidAmount =
+    settle || bookingPaid ? toNumber(booking.deposit) : toNumber(booking.depositPaid);
 
   let tenant;
   update((draft) => {
@@ -570,7 +665,7 @@ export function checkInFromBooking(roomId, { settle = true } = {}) {
       },
       quote,
       rentPaid,
-      toNumber(booking.depositPaid),
+      depositPaidAmount,
     );
   });
 

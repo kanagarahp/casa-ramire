@@ -1,5 +1,5 @@
 import { formatDate, rupiah } from '../core/format.js';
-import { getNotificationEmail, getSettings } from './settings.js';
+import { getBankDetails, getNotificationEmail, getSettings } from './settings.js';
 
 function adminKey() {
   return String(getSettings().catalogAdminKey || '').trim();
@@ -100,7 +100,16 @@ export function buildBillingEmail({
   paymentInstructions,
 }) {
   const subject = `${title} — ${propertyName()}`;
-  const instructions = String(paymentInstructions || '').trim();
+  const bank = getBankDetails();
+  const instructions =
+    String(paymentInstructions || '').trim() ||
+    [
+      `Transfer ke ${bank.bankName}`,
+      `No. Rekening: ${bank.accountNumber}`,
+      `a.n. ${bank.accountName}`,
+      '',
+      'Setelah transfer, kirim bukti pembayaran ke WhatsApp admin Casa Ramire.',
+    ].join('\n');
   const lines = [
     `Halo ${name || 'Kak'},`,
     '',
@@ -113,7 +122,7 @@ export function buildBillingEmail({
     paymentUrl
       ? 'Silakan lakukan pembayaran melalui link berikut:'
       : instructions ||
-        'Silakan lakukan pembayaran melalui transfer bank atau QRIS. Setelah membayar, kirim bukti pembayaran ke admin Casa Ramire.',
+        'Silakan lakukan pembayaran melalui transfer Bank Mandiri. Setelah membayar, kirim bukti pembayaran ke admin Casa Ramire.',
     paymentUrl || null,
     '',
     paymentUrl

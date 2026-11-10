@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { normalizePublicState } from '../api/_lib/state-normalize.js';
+import { PAYMENT_METHODS } from '../src/core/constants.js';
 import { buildSeedState } from '../src/core/seed.js';
 import { getState, replaceState } from '../src/core/store.js';
+import { buildBillingEmail } from '../src/services/email.js';
 import {
   getDailyAvailableRooms,
   getDailySummary,
@@ -13,10 +15,13 @@ import { getCarParkingStatus, parkingFullMessage } from '../src/services/parking
 import { carAddon, computeQuote, getRate } from '../src/services/pricing.js';
 import {
   checkInDirect,
+  checkInFromBooking,
   getRoom,
   getRooms,
+  markBookingPaymentUnpaid,
   moveBooking,
   saveBooking,
+  verifyBookingPayment,
 } from '../src/services/property.js';
 import { updateSettings } from '../src/services/settings.js';
 
@@ -162,6 +167,70 @@ test('public API normalization adds room 101 before the admin device syncs', () 
   assert.equal(state.rooms.some((room) => room.nomor === '101'), true);
   assert.equal(state.pricing.lantai1.harian, 250000);
   assert.equal(state.settings.parkingCapacity, 15);
+});
+
+test('booking payment verification marks rent + deposit paid and carries deposit to check-in', () => {
+  fresh();
+  const room = getRooms().find((item) => item.nomor === '201');
+  saveBooking(room.id, {
+    ...bookingPayload({ periode: '1', endDate: '' }),
+    depositEnabled: true,
+    depositValue: 500000,
+    depositPaidNow: false,
+    payOption: 'partial',
+  });
+
+  let booking = getRoom(room.id).booking;
+  assert.equal(booking.paymentStatus, 'unpaid');
+  assert.equal(booking.depositPaid, 0);
+
+  const verified = verifyBookingPayment(room.id, {
+    method: 'Transfer Bank Mandiri',
+    note: 'Transfer a.n. Budi',
+  });
+  booking = verified.booking;
+  assert.equal(booking.paymentStatus, 'paid');
+  assert.equal(booking.depositPaid, 500000);
+  assert.equal(booking.amountPaid, booking.grandTotal + 500000);
+  assert.ok(
+    booking.depositHistory.some((entry) =>
+      String(entry.note || '').toLowerCase().includes('deposit booking'),
+    ),
+  );
+
+  const tenant = checkInFromBooking(room.id, { settle: true });
+  assert.equal(tenant.depositPaid, 500000);
+});
+
+test('booking payment verification can be reverted', () => {
+  fresh();
+  const room = getRooms().find((item) => item.nomor === '202');
+  saveBooking(room.id, {
+    ...bookingPayload({ periode: '1', endDate: '' }),
+    depositEnabled: true,
+    depositValue: 500000,
+    depositPaidNow: false,
+    payOption: 'partial',
+  });
+  verifyBookingPayment(room.id);
+  const unpaid = markBookingPaymentUnpaid(room.id);
+  assert.equal(unpaid.booking.paymentStatus, 'unpaid');
+  assert.equal(unpaid.booking.depositPaid, 0);
+  assert.equal(unpaid.booking.amountPaid, 0);
+});
+
+test('only bank transfer and cash are offered, and billing email includes Mandiri account', () => {
+  assert.deepEqual(PAYMENT_METHODS, ['Transfer Bank Mandiri', 'Tunai / Cash']);
+  const email = buildBillingEmail({
+    name: 'Budi',
+    title: 'Tagihan Sewa',
+    amount: 2200000,
+    dueDate: '2026-11-20',
+  });
+  assert.match(email.text, /Bank Mandiri/);
+  assert.match(email.text, /700013745877/);
+  assert.match(email.text, /ERNY KURNIAWATI/);
+  assert.doesNotMatch(email.text, /QRIS/);
 });
 
 test('old saves without floor 1 receive the VIP room and room fields', () => {

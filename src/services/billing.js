@@ -88,7 +88,7 @@ export function getBill(id) {
   return getState().bills.find((bill) => String(bill.id) === String(id)) || null;
 }
 
-export function verifyBill(id, { method = 'Virtual Account BCA', note = '' } = {}) {
+export function verifyBill(id, { method = 'Transfer Bank Mandiri', note = '' } = {}) {
   const state = getState();
   const bill = getBill(id);
   if (!bill) throw new Error('Tagihan tidak ditemukan.');
@@ -285,7 +285,7 @@ function pushManualInvoicePayment(draft, invoice, { method, note, paidAt }) {
   });
 }
 
-export function verifyManualInvoice(id, { method = 'Virtual Account BCA', note = '' } = {}) {
+export function verifyManualInvoice(id, { method = 'Transfer Bank Mandiri', note = '' } = {}) {
   update((draft) => {
     const invoice = draft.manualInvoices.find((item) => String(item.id) === String(id));
     if (!invoice) throw new Error('Invoice tidak ditemukan.');

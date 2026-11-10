@@ -27,6 +27,7 @@ import {
   openCheckoutModal,
   openExtendModal,
   openMoveBookingModal,
+  openVerifyBookingPaymentModal,
 } from './booking-modal.js';
 import { openTenantDetail } from './tenant-detail.js';
 
@@ -80,9 +81,12 @@ function actionsFor(room) {
     `;
   }
   if (room.status === 'booking') {
+    const paid =
+      room.booking?.paymentStatus === 'paid' || room.booking?.payOption === 'full';
     return `
       ${photoAction(room)}
       <button type="button" class="btn-primary btn-xs" data-action="checkin" data-id="${room.id}">${icon('LogIn', 'w-3 h-3')} Check-in</button>
+      <button type="button" class="${paid ? 'btn-outline' : 'btn-gold'} btn-xs" data-action="verify-booking" data-id="${room.id}">${icon(paid ? 'BadgeCheck' : 'ShieldCheck', 'w-3 h-3')} ${paid ? 'Lunas' : 'Verifikasi'}</button>
       <button type="button" class="btn-outline btn-xs" data-action="edit-booking" data-id="${room.id}">${icon('Pencil', 'w-3 h-3')} Edit</button>
       <button type="button" class="btn-outline btn-xs" data-action="move-booking" data-id="${room.id}">${icon('Repeat', 'w-3 h-3')} Pindah</button>
       <button type="button" class="btn-ghost btn-xs text-rose-600" data-action="cancel-booking" data-id="${room.id}" title="Batalkan booking">${icon('X', 'w-3.5 h-3.5')}</button>
@@ -108,12 +112,14 @@ function occupantHtml(room, tenant) {
       </button>`;
   }
   if (room.status === 'booking' && room.booking) {
+    const paid =
+      room.booking.paymentStatus === 'paid' || room.booking.payOption === 'full';
     return `
       <button type="button" class="flex items-center gap-2 hover:text-brand text-left min-w-0" data-action="edit-booking" data-id="${room.id}">
         ${avatar(room.booking.name, 'w-7 h-7 text-[9px] bg-indigo-600')}
         <span class="min-w-0">
           <span class="block text-xs font-bold text-stone-800 truncate">${esc(room.booking.name)}</span>
-          <span class="block text-[10px] text-indigo-500">Calon penghuni</span>
+          <span class="block text-[10px] ${paid ? 'text-emerald-600' : 'text-amber-600'}">${paid ? 'Pembayaran lunas' : 'Pembayaran belum diterima'}</span>
         </span>
       </button>`;
   }
@@ -353,6 +359,7 @@ export function render(root) {
     }
     if (action === 'edit-booking') openBookingModal(room.id, 'edit_booking');
     if (action === 'move-booking') openMoveBookingModal(room.id);
+    if (action === 'verify-booking') openVerifyBookingPaymentModal(room.id);
     if (action === 'detail' && room.tenantId) openTenantDetail(room.tenantId);
     if (action === 'extend' && room.tenantId) openExtendModal(room.tenantId);
     if (action === 'checkout' && room.tenantId) openCheckoutModal(room.tenantId);

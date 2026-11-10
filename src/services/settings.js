@@ -13,6 +13,9 @@ const TEXT_FIELDS = [
   'catalogAdminKey',
   'paymentInstructions',
   'notificationEmail',
+  'bankName',
+  'bankAccountNumber',
+  'bankAccountName',
 ];
 
 const BOOLEAN_FIELDS = ['dokuEnabled'];
@@ -80,4 +83,18 @@ export function getParkingCapacity() {
 export function getCarDailyFee() {
   const value = Math.floor(Number(getSettings().carDailyFee));
   return Number.isFinite(value) && value >= 0 ? value : 10000;
+}
+
+export function getBankDetails() {
+  const settings = getSettings();
+  return {
+    bankName: String(settings.bankName || 'Bank Mandiri').trim(),
+    accountNumber: String(settings.bankAccountNumber || '700013745877').trim(),
+    accountName: String(settings.bankAccountName || 'ERNY KURNIAWATI').trim(),
+  };
+}
+
+export function getDefaultPaymentInstructions() {
+  const bank = getBankDetails();
+  return `Transfer ke ${bank.bankName}\nNo. Rekening: ${bank.accountNumber}\na.n. ${bank.accountName}\n\nSetelah transfer, kirim bukti pembayaran ke WhatsApp admin Casa Ramire.`;
 }

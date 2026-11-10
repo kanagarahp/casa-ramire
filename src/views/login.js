@@ -7,7 +7,7 @@ import { openModal } from '../ui/modal.js';
 
 const FEATURES = [
   { icon: 'Building2', title: '42 kamar, satu dashboard', desc: 'Okupansi, booking, dan status kamar real-time.' },
-  { icon: 'ReceiptText', title: 'Tagihan & verifikasi kas', desc: 'VA, QRIS, dan pengingat WhatsApp dalam satu alur.' },
+  { icon: 'ReceiptText', title: 'Tagihan & verifikasi kas', desc: 'Transfer bank, verifikasi pembayaran, dan pengingat WhatsApp dalam satu alur.' },
   { icon: 'Wallet', title: 'Laporan keuangan rapi', desc: 'Accrual, jurnal pengeluaran, dan laba rugi.' },
 ];
 

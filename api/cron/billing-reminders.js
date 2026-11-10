@@ -33,7 +33,15 @@ function isAuthorized(req, res) {
   return requireAdmin(req, res);
 }
 
-async function sendReminder({ kind, record, propertyName, paymentInstructions }) {
+async function sendReminder({
+  kind,
+  record,
+  propertyName,
+  paymentInstructions,
+  bankName,
+  bankAccountNumber,
+  bankAccountName,
+}) {
   const recipient = String(record.email || '').trim().toLowerCase();
   const admin = notificationEmail();
   const outstanding = Math.max(0, toNumber(record.amount) - toNumber(record.paid));
@@ -51,6 +59,9 @@ async function sendReminder({ kind, record, propertyName, paymentInstructions })
     roomNumber: record.roomNumber || '',
     propertyName,
     paymentInstructions,
+    bankName,
+    bankAccountNumber,
+    bankAccountName,
   });
 
   if (!recipient) {
@@ -105,6 +116,13 @@ export default async function handler(req, res) {
     const targetDate = addDays(todayISO(), 7);
     const propertyName = String(state?.settings?.propertyName || 'Casa Ramire');
     const paymentInstructions = String(state?.settings?.paymentInstructions || '');
+    const bankName = String(state?.settings?.bankName || 'Bank Mandiri');
+    const bankAccountNumber = String(
+      state?.settings?.bankAccountNumber || '700013745877',
+    );
+    const bankAccountName = String(
+      state?.settings?.bankAccountName || 'ERNY KURNIAWATI',
+    );
 
     const bills = (state.bills || []).filter(
       (bill) =>
@@ -149,6 +167,9 @@ export default async function handler(req, res) {
             record,
             propertyName,
             paymentInstructions,
+            bankName,
+            bankAccountNumber,
+            bankAccountName,
           });
           if (!outcome.sent) {
             failed += 1;

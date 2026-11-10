@@ -81,6 +81,9 @@ function validateBooking(body) {
       roomNumber: asString(body?.roomNumber, 10),
       floor: ['1', '2', '3'].includes(String(body?.floor)) ? String(body.floor) : '',
       estimate: Number(body?.estimate) > 0 ? Math.round(Number(body.estimate)) : 0,
+      deposit: Number(body?.deposit) > 0 ? Math.round(Number(body.deposit)) : 0,
+      totalDue: Number(body?.totalDue) > 0 ? Math.round(Number(body.totalDue)) : 0,
+      paymentStatus: 'unpaid',
       emergencyContact: {
         name: asString(emergency.name, 120),
         relation: asString(emergency.relation, 60),
@@ -137,10 +140,19 @@ function roomUnavailableMessage(state, data) {
   return '';
 }
 
-function bookingEmailText({ code, data, admin = false }) {
+function bookingEmailText({ code, data, admin = false, state = null }) {
   const title = admin ? 'Booking Online Baru' : 'Booking Online Diterima';
+  const settings = state?.settings || {};
+  const bank = {
+    bankName: String(settings.bankName || 'Bank Mandiri'),
+    accountNumber: String(settings.bankAccountNumber || '700013745877'),
+    accountName: String(settings.bankAccountName || 'ERNY KURNIAWATI'),
+  };
+  const deposit = Math.max(0, Number(data.deposit) || 0);
+  const rent = Math.max(0, Number(data.estimate) || 0);
+  const totalDue = Math.max(0, Number(data.totalDue) || rent + deposit);
   return [
-    admin ? `Booking baru masuk dari landing page.` : `Halo ${data.name},`,
+    admin ? 'Booking baru masuk dari landing page.' : `Halo ${data.name},`,
     '',
     `${title} — Casa Ramire`,
     `Kode booking: ${code}`,
@@ -153,11 +165,20 @@ function bookingEmailText({ code, data, admin = false }) {
     `Lantai: ${data.floor || 'fleksibel'}`,
     `Kamar: ${data.roomNumber || 'dipilih admin'}`,
     `Mobil: ${data.car ? 'Ya' : 'Tidak'}`,
-    `Estimasi: Rp${Math.round(Number(data.estimate) || 0).toLocaleString('id-ID')}`,
+    `Total sewa: Rp${rent.toLocaleString('id-ID')}`,
+    `Deposit (dikembalikan saat check-out): Rp${deposit.toLocaleString('id-ID')}`,
+    `Total yang perlu dibayar: Rp${totalDue.toLocaleString('id-ID')}`,
+    '',
+    'Transfer pembayaran ke:',
+    bank.bankName,
+    `No. Rekening: ${bank.accountNumber}`,
+    `a.n. ${bank.accountName}`,
+    '',
+    'Setelah transfer, kirim bukti pembayaran ke WhatsApp admin. Admin akan memverifikasi pembayaran booking Anda.',
     data.notes ? `Catatan: ${data.notes}` : null,
     '',
     admin
-      ? 'Buka menu Booking Online di aplikasi untuk memproses permintaan ini.'
+      ? 'Buka menu Booking Online di aplikasi untuk memproses permintaan ini dan verifikasi pembayarannya.'
       : 'Admin akan menghubungi Anda untuk konfirmasi ketersediaan kamar.',
     '',
     'Casa Ramire',
@@ -166,7 +187,7 @@ function bookingEmailText({ code, data, admin = false }) {
     .join('\n');
 }
 
-async function sendBookingEmails({ code, data }) {
+async function sendBookingEmails({ code, data, state = null }) {
   if (!emailConfigured()) {
     return { sent: false, reason: 'EMAIL_NOT_CONFIGURED' };
   }
@@ -176,7 +197,7 @@ async function sendBookingEmails({ code, data }) {
     sendResendEmail({
       to: data.email,
       subject: `Booking Online Diterima — ${code}`,
-      text: bookingEmailText({ code, data }),
+      text: bookingEmailText({ code, data, state }),
     }),
   );
   const admin = notificationEmail();
@@ -185,7 +206,7 @@ async function sendBookingEmails({ code, data }) {
       sendResendEmail({
         to: admin,
         subject: `Booking Online Baru — ${code}`,
-        text: bookingEmailText({ code, data, admin: true }),
+        text: bookingEmailText({ code, data, admin: true, state }),
       }),
     );
   }
@@ -350,7 +371,7 @@ export default async function handler(req, res) {
       });
 
       void result;
-      const emailResult = await sendBookingEmails({ code, data }).catch((error) => {
+      const emailResult = await sendBookingEmails({ code, data, state: sharedState }).catch((error) => {
         console.error('[bookings] notifikasi email error', error);
         return { sent: false, reason: error.message };
       });

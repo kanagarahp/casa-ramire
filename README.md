@@ -29,7 +29,8 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 | **Penghuni** | Direktori, biodata + email, kontak darurat, **lama tinggal sejak check-in**, riwayat kamar/pindah, riwayat pembayaran + pembayaran terakhir, tunggakan |
 | **Financial** | **Buku kas** semua transaksi, **deposit/jaminan**, jurnal pengeluaran + kategori, invoice layanan untuk **tenant/non-tenant**, pendapatan POS, pendapatan accrual, laba rugi |
 | **Sewa & Kas** | Daftar tagihan, filter status, verifikasi/batal verifikasi pembayaran, pengingat WhatsApp, **kirim tagihan ke email penghuni** |
-| **Pembayaran DOKU** | Opsional dan nonaktif secara default. Jika diaktifkan: link QRIS/VA/e-wallet per tagihan/invoice/perpanjangan, status lunas otomatis lewat webhook |
+| **Pembayaran Transfer** | Info rekening Bank Mandiri (ERNY KURNIAWATI — 700013745877) tampil di landing page, email booking, tagihan, dan pengingat H-7. Pembayaran diverifikasi manual oleh admin. |
+| **Pembayaran DOKU** | Opsional dan nonaktif secara default. Jika diaktifkan: link pembayaran per tagihan/invoice/perpanjangan, status lunas otomatis lewat webhook |
 | **Email Tagihan** | Kirim rincian tagihan/invoice ke email penghuni melalui Resend tanpa perlu link DOKU, dengan fallback ke aplikasi email perangkat |
 | **Sinkronisasi** | State operasional dibagikan lewat `/api/state` agar status pembayaran dari webhook langsung terlihat di dashboard |
 | **Konten WA** | Editor template tagihan, invoice, pengingat; preview WhatsApp; variabel otomatis |
@@ -199,7 +200,7 @@ Alur singkat:
 1. Admin membuat tagihan / invoice / perpanjangan seperti biasa.
 2. Klik **Link DOKU** (atau **Buat Link DOKU** di form perpanjangan).
 3. Kirim link ke penghuni lewat WhatsApp dari modal yang muncul.
-4. Penghuni membayar di halaman DOKU (QRIS / VA / e-wallet).
+4. Penghuni membayar melalui kanal DOKU yang sudah diaktifkan.
 5. DOKU mengirim webhook ke `/api/payments/doku/notification`.
 6. Webhook memverifikasi signature, menandai tagihan/invoice lunas, atau
    memperpanjang kontrak secara otomatis.
@@ -224,7 +225,7 @@ DOKU_PAYMENT_DUE_MINUTES=10080
 CATALOG_ADMIN_KEY=...          # juga dipakai untuk sinkronisasi state
 POSTGRES_URL / POSTGRES_URL_NON_POOLING
 # Opsional, isi hanya channel yang aktif di akun DOKU:
-# DOKU_PAYMENT_CHANNELS=QRIS,VIRTUAL_ACCOUNT_BCA,EMONEY_DANA
+# DOKU_PAYMENT_CHANNELS=VIRTUAL_ACCOUNT_BCA
 ```
 
 Daftarkan notification URL di DOKU Back Office:

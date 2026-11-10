@@ -56,6 +56,9 @@ const FALLBACK_PROPERTY = {
   mapsEmbedUrl: 'https://maps.google.com/maps?q=casa%20ramire%20kost%20jogja&z=16&output=embed',
   facilities: FALLBACK_FACILITIES,
   deposit: 500000,
+  bankName: 'Bank Mandiri',
+  bankAccountNumber: '700013745877',
+  bankAccountName: 'ERNY KURNIAWATI',
 };
 
 function normalizeCatalog(input) {
@@ -156,6 +159,59 @@ function waHref(property, message) {
   const phone = String(property?.whatsapp || '').trim();
   if (!phone) return '';
   return waLink(phone, message);
+}
+
+function bankOf(property) {
+  return {
+    bankName: String(property?.bankName || 'Bank Mandiri').trim(),
+    accountNumber: String(property?.bankAccountNumber || '700013745877').trim(),
+    accountName: String(property?.bankAccountName || 'ERNY KURNIAWATI').trim(),
+  };
+}
+
+function bankTransferHtml(property, { compact = false } = {}) {
+  const bank = bankOf(property);
+  return `
+    <div class="${compact ? 'rounded-xl border border-line bg-white p-3' : 'rounded-2xl border border-line bg-white p-4'} text-xs space-y-1.5">
+      <p class="text-[10px] font-extrabold uppercase tracking-wider text-stone-500">Transfer pembayaran</p>
+      <p class="text-sm font-black text-stone-800">${esc(bank.bankName)}</p>
+      <p class="font-mono text-base font-black tracking-wider text-brand">${esc(bank.accountNumber)}</p>
+      <p class="font-bold text-stone-700">a.n. ${esc(bank.accountName)}</p>
+      <button type="button" class="btn-outline btn-xs mt-1" data-copy-account="${esc(bank.accountNumber)}">${icon('Copy', 'w-3 h-3')} Salin nomor rekening</button>
+    </div>
+  `;
+}
+
+async function copyAccountNumber(value) {
+  const text = String(value || '').trim();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Nomor rekening disalin.');
+  } catch {
+    toast(`Nomor rekening: ${text}`, 'warning');
+  }
+}
+
+function bindCopyAccount(scope) {
+  scope?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-copy-account]');
+    if (!button) return;
+    event.preventDefault();
+    void copyAccountNumber(button.dataset.copyAccount);
+  });
+}
+
+function depositInfoHtml(deposit, { compact = false } = {}) {
+  return `
+    <div class="${compact ? 'rounded-xl border border-amber-200 bg-amber-50 p-3' : 'rounded-2xl border border-amber-200 bg-amber-50 p-4'} text-xs text-amber-900 flex items-start gap-2">
+      <span class="w-5 h-5 rounded-full bg-amber-200 text-amber-900 font-black text-[11px] flex items-center justify-center shrink-0" title="Deposit adalah uang jaminan, bukan biaya sewa.">i</span>
+      <div>
+        <p class="font-extrabold">Deposit ${rupiah(deposit)}</p>
+        <p class="text-[11px] mt-0.5 leading-relaxed">Deposit dibayar di awal bersama sewa dan <b>dikembalikan saat check-out</b> sesuai ketentuan. Deposit bukan biaya sewa.</p>
+      </div>
+    </div>
+  `;
 }
 
 function facilityIcon(label) {
@@ -375,9 +431,7 @@ function availabilitySection(catalog) {
                   : `<b>Membawa mobil?</b> Tambahan parkir ${rupiah(CAR_FEE)}/bulan atau ${rupiah(catalog.property.carDailyFee || 10000)}/hari. Sisa slot: <b>${catalog.parking?.available ?? catalog.property.parkingCapacity ?? 15}</b> dari ${catalog.parking?.capacity ?? 15}.`
               }
             </div>
-            <div class="rounded-2xl border border-line bg-cream/60 p-3.5 mt-3 text-[11px] text-stone-600 leading-relaxed">
-              Deposit ${rupiah(catalog.property.deposit || 0)} dibayarkan saat check-in dan dikembalikan sesuai ketentuan.
-            </div>
+            ${depositInfoHtml(catalog.property.deposit || 0, { compact: true })}
           </div>
         </div>
       </div>
@@ -716,7 +770,7 @@ function pageHtml(catalog, { preview }) {
 
             <p class="hint mt-4">
               * Harga dapat berubah sewaktu-waktu. Tambahan parkir mobil ${rupiah(CAR_FEE)}/bulan.
-              Deposit ${rupiah(property.deposit || 0)} dibayar saat check-in.
+              Deposit ${rupiah(property.deposit || 0)} dibayar di awal bersama sewa dan dikembalikan saat check-out.
             </p>
           </div>
         </section>
@@ -730,10 +784,9 @@ function pageHtml(catalog, { preview }) {
                 <p class="page-subtitle">
                   Fasilitas utama sudah termasuk dalam harga sewa. Ajukan kebutuhan tambahan ke admin.
                 </p>
-                <div class="card rounded-2xl p-4 mt-5 bg-cream/60">
-                  <p class="text-[10px] font-extrabold uppercase tracking-wider text-stone-500">Deposit</p>
-                  <p class="text-xl font-black text-stone-800 mt-1">${rupiah(property.deposit || 0)}</p>
-                  <p class="hint mt-1">Deposit dikembalikan sesuai ketentuan saat check-out.</p>
+                <div class="space-y-3 mt-5">
+                  ${depositInfoHtml(property.deposit || 0)}
+                  ${bankTransferHtml(property, { compact: true })}
                 </div>
               </div>
               <div class="grid sm:grid-cols-2 gap-3">${facilityCards(catalog)}</div>
@@ -870,11 +923,12 @@ function pageHtml(catalog, { preview }) {
 /* Booking modal                                                       */
 /* ------------------------------------------------------------------ */
 
-function summaryHtml(quote, deposit) {
+function summaryHtml(quote, deposit, property) {
   if (quote.error) {
     return `<div class="flex items-start gap-2 text-rose-700">${icon('CircleAlert', 'w-4 h-4 shrink-0 mt-0.5')}<span class="font-semibold">${esc(quote.error)}</span></div>`;
   }
 
+  const totalDue = quote.total + deposit;
   return `
     <div class="flex justify-between gap-3"><span class="text-stone-500">Sewa (${quote.units} ${quote.period.unit})</span><span class="font-bold">${rupiah(quote.base)}</span></div>
     ${
@@ -888,8 +942,11 @@ function summaryHtml(quote, deposit) {
         : ''
     }
     <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-bold text-stone-700">Total sewa</span><span class="font-extrabold text-stone-800">${rupiah(quote.total)}</span></div>
-    <div class="flex justify-between gap-3"><span class="text-stone-500">Deposit (dibayar saat check-in)</span><span class="font-bold">${rupiah(deposit)}</span></div>
-    <p class="text-[10px] text-stone-600 pt-1">Periode: ${formatDate(quote.start)} — ${formatDate(quote.end)}</p>
+    <div class="flex justify-between gap-3"><span class="text-stone-500 flex items-center gap-1">Deposit <span class="w-4 h-4 rounded-full bg-amber-100 text-amber-800 font-black text-[9px] inline-flex items-center justify-center" title="Deposit adalah uang jaminan dan dikembalikan saat check-out.">i</span></span><span class="font-bold">${rupiah(deposit)}</span></div>
+    <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-extrabold text-stone-800">Total yang perlu dibayar</span><span class="font-black text-lg text-brand">${rupiah(totalDue)}</span></div>
+    ${depositInfoHtml(deposit, { compact: true })}
+    ${bankTransferHtml(property, { compact: true })}
+    <p class="text-[10px] text-stone-600 pt-1">Periode: ${formatDate(quote.start)} — ${formatDate(quote.end)}. Setelah transfer, kirim bukti ke admin untuk diverifikasi.</p>
   `;
 }
 
@@ -1048,6 +1105,7 @@ function openBookingModal(
       <button type="submit" form="hm-form" class="btn-primary btn-sm" data-submit>${icon('Send', 'w-4 h-4')} Kirim Booking</button>
     `,
     onMount(el, close) {
+      bindCopyAccount(el);
       const value = (selector) => el.querySelector(selector)?.value.trim() ?? '';
       const summary = el.querySelector('#hm-summary');
       const promoInput = el.querySelector('#hm-promo');
@@ -1163,7 +1221,7 @@ function openBookingModal(
 
       const paintSummary = () => {
         const quote = currentQuote();
-        summary.innerHTML = summaryHtml(quote, deposit);
+        summary.innerHTML = summaryHtml(quote, deposit, catalog.property);
         return quote;
       };
 
@@ -1325,6 +1383,9 @@ function openBookingModal(
           car: Boolean(carInput.checked),
           promoCode: appliedCode,
           estimate: quote.total,
+          deposit,
+          totalDue: quote.total + deposit,
+          paymentStatus: 'unpaid',
         };
 
         submitButton.disabled = true;
@@ -1346,12 +1407,14 @@ function openBookingModal(
 
 function openBookingSuccessModal(catalog, request, quote) {
   const property = catalog.property;
-  const message = `Halo Admin ${property.name}, saya sudah mengirim booking online dengan kode ${request.code} atas nama ${request.name}. Mohon konfirmasi ketersediaan kamar.`;
+  const depositAmount = Number(request.deposit ?? property.deposit) || 0;
+  const totalDue = quote.total + depositAmount;
+  const message = `Halo Admin ${property.name}, saya sudah mengirim booking online dengan kode ${request.code} atas nama ${request.name}. Mohon konfirmasi ketersediaan kamar dan pembayaran.`;
   const wa = waHref(property, message);
 
   openModal({
     title: 'Booking Berhasil Dikirim',
-    subtitle: 'Admin akan menghubungi kamu untuk konfirmasi.',
+    subtitle: 'Silakan transfer sewa + deposit, lalu kirim bukti ke admin.',
     size: 'md',
     body: `
       <div class="space-y-4">
@@ -1371,15 +1434,29 @@ function openBookingSuccessModal(catalog, request, quote) {
           <div class="flex justify-between gap-3"><span class="text-stone-500">Durasi</span><b class="text-stone-800">${esc(quote.period.label)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Periode</span><b class="text-stone-800 text-right">${formatDate(quote.start)} — ${formatDate(quote.end)}</b></div>
           ${request.car ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Parkir mobil</span><b class="text-stone-800">${rupiah(quote.carTotal)}</b></div>` : ''}
-          <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="text-stone-500">Estimasi total sewa</span><b class="text-stone-800">${rupiah(quote.total)}</b></div>
-          <p class="text-[10px] text-stone-500">Deposit ${rupiah(catalog.property.deposit || 0)} dibayar saat check-in. Total final dikonfirmasi admin.</p>
+          <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="text-stone-500">Total sewa</span><b class="text-stone-800">${rupiah(quote.total)}</b></div>
+          <div class="flex justify-between gap-3"><span class="text-stone-500 flex items-center gap-1">Deposit <span class="w-4 h-4 rounded-full bg-amber-100 text-amber-800 font-black text-[9px] inline-flex items-center justify-center" title="Deposit dikembalikan saat check-out.">i</span></span><b class="text-stone-800">${rupiah(depositAmount)}</b></div>
+          <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-extrabold text-stone-800">Total transfer</span><b class="text-lg font-black text-brand">${rupiah(totalDue)}</b></div>
+        </div>
+
+        ${depositInfoHtml(depositAmount, { compact: true })}
+
+        <div class="rounded-2xl border-2 border-brand/20 bg-brand-50/50 p-4">
+          <p class="text-[10px] font-extrabold uppercase tracking-wider text-brand mb-2">Segera lakukan pembayaran</p>
+          ${bankTransferHtml(property)}
+          <p class="text-[11px] text-stone-600 leading-relaxed mt-2">Transfer <b>total sewa + deposit</b>, lalu kirim bukti ke WhatsApp admin. Admin akan memverifikasi pembayaran dan mengonfirmasi booking Anda.</p>
+          ${
+            wa
+              ? `<a href="${wa}" target="_blank" rel="noopener" class="btn-primary btn-sm mt-3 w-full justify-center">${icon('MessageCircle', 'w-4 h-4')} Kirim Bukti Transfer ke Admin</a>`
+              : ''
+          }
         </div>
 
         ${
           request.offline
             ? `<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">Mode lokal: server booking belum tersedia. Permintaan tersimpan di perangkat ini dan bisa diproses dari menu Booking Online.</div>`
             : `<div class="rounded-xl border border-line bg-white px-3 py-2.5 text-[11px] text-stone-600 leading-relaxed">
-                ${request.emailSent ? `Notifikasi booking sudah dikirim ke <b>${esc(request.email)}</b> dan email admin. ` : ''}
+                ${request.emailSent ? `Notifikasi booking dan info rekening sudah dikirim ke <b>${esc(request.email)}</b> dan email admin. ` : ''}
                 Admin akan menghubungi WhatsApp <b>${esc(request.phone)}</b> untuk konfirmasi.
                 ${request.emailNote ? `<span class="block text-amber-700 mt-1">${esc(request.emailNote)}</span>` : ''}
               </div>`
@@ -1394,6 +1471,9 @@ function openBookingSuccessModal(catalog, request, quote) {
           : ''
       }
     `,
+    onMount(el) {
+      bindCopyAccount(el);
+    },
   });
 }
 
@@ -1413,6 +1493,7 @@ function openLightbox(catalog, index) {
 }
 
 function bindLanding(root, catalog) {
+  bindCopyAccount(root);
   root.querySelectorAll('[data-scroll]').forEach((button) => {
     button.addEventListener('click', () => {
       const id = button.dataset.scroll;
@@ -1515,6 +1596,7 @@ export function render(root) {
 
       catalog = {
         ...catalog,
+        property: live.bank ? { ...catalog.property, ...live.bank } : catalog.property,
         availability: live.availability,
         parking: live.parking || catalog.parking,
         pricing: live.pricing

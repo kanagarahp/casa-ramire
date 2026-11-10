@@ -2,7 +2,13 @@ import { BOOKING_REQUEST_STATUS } from '../core/constants.js';
 import { formatDate, formatDateTime, rupiah, todayISO } from '../core/format.js';
 import { fetchBookingRequests, updateBookingRequest } from '../services/bookings.js';
 import { notifyBookingSaved } from '../services/notifications.js';
-import { carAddon, computeQuote, getPromoByCode, syncPromoUsage } from '../services/pricing.js';
+import {
+  carAddon,
+  computeQuote,
+  getDepositDefault,
+  getPromoByCode,
+  syncPromoUsage,
+} from '../services/pricing.js';
 import { getRooms, saveBooking } from '../services/property.js';
 import { emptyState, pageHeader, statCard } from '../ui/components.js';
 import { delegate, esc } from '../ui/dom.js';
@@ -76,7 +82,10 @@ function rowHtml(request) {
         ${request.car ? '<span class="badge-blue">Mobil</span>' : '<span class="badge-gray">Tanpa mobil</span>'}
         <p class="text-[10px] text-stone-500 mt-1">${esc(promoLabel(request))}</p>
       </td>
-      <td class="font-bold whitespace-nowrap">${request.estimate ? rupiah(request.estimate) : '—'}</td>
+      <td class="font-bold whitespace-nowrap">
+        ${request.estimate ? rupiah(request.estimate) : '—'}
+        ${Number(request.deposit) > 0 ? `<p class="text-[10px] font-semibold text-amber-700">+ deposit ${rupiah(request.deposit)}</p>` : ''}
+      </td>
       <td>${statusBadge(request.status)}</td>
       <td>
         <div class="flex flex-wrap justify-end gap-1">
@@ -291,6 +300,8 @@ function openConvertModal(request, onDone) {
     return;
   }
   const preferred = rooms.find((room) => String(room.id) === String(request.roomId));
+  const depositAmount =
+    Number(request.deposit) > 0 ? Number(request.deposit) : getDepositDefault();
 
   openModal({
     title: `Konversi Booking ${request.code}`,
@@ -306,6 +317,7 @@ function openConvertModal(request, onDone) {
           <div class="flex justify-between gap-3"><span class="text-stone-500">Mulai</span><b class="text-stone-800">${formatDate(request.startDate)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Durasi</span><b class="text-stone-800">${periodLabel(request)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Mobil</span><b class="text-stone-800">${request.car ? 'Ya (+Rp130.000/bln)' : 'Tidak'}</b></div>
+          <div class="flex justify-between gap-3"><span class="text-stone-500">Deposit</span><b class="text-stone-800">${rupiah(depositAmount)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Kode promo</span><b class="text-stone-800">${esc(promoLabel(request))}</b></div>
           ${request.notes ? `<div class="sm:col-span-2 flex justify-between gap-3"><span class="text-stone-500">Catatan</span><b class="text-stone-800 text-right">${esc(request.notes)}</b></div>` : ''}
         </div>
@@ -354,8 +366,9 @@ function openConvertModal(request, onDone) {
             promo: getPromoByCode(request.promoCode),
             addons: request.car ? [carAddon()] : [],
             car: Boolean(request.car),
-            depositEnabled: false,
-            depositValue: 0,
+            depositEnabled: depositAmount > 0,
+            depositValue: depositAmount,
+            depositPaid: false,
             payOption: 'partial',
           });
           summary.innerHTML = `
@@ -363,7 +376,9 @@ function openConvertModal(request, onDone) {
             ${quote.discount > 0 ? `<div class="flex justify-between gap-3 text-rose-700"><span>Diskon${quote.promo ? ` (${esc(quote.promo.name)})` : ''}</span><span class="font-bold">−${rupiah(quote.discount)}</span></div>` : ''}
             ${quote.addonTotal > 0 ? `<div class="flex justify-between gap-3 text-amber-800"><span>Parkir mobil</span><span class="font-bold">${rupiah(quote.addonTotal)}</span></div>` : ''}
             <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-bold text-stone-700">Total sewa</span><span class="font-extrabold text-stone-800">${rupiah(quote.grandTotal)}</span></div>
-            <p class="text-[10px] text-stone-500">${formatDate(quote.startDate)} — ${formatDate(quote.endDate)}</p>
+            <div class="flex justify-between gap-3"><span class="text-stone-500">Deposit (dikembalikan saat check-out)</span><span class="font-bold">${rupiah(quote.deposit)}</span></div>
+            <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-bold text-stone-700">Total transfer</span><span class="font-black text-brand">${rupiah(quote.grandTotal + quote.deposit)}</span></div>
+            <p class="text-[10px] text-stone-500">${formatDate(quote.startDate)} — ${formatDate(quote.endDate)}. Pembayaran belum diterima; admin dapat memverifikasi setelah transfer.</p>
           `;
           return quote;
         } catch (error) {
@@ -395,8 +410,9 @@ function openConvertModal(request, onDone) {
             car: Boolean(request.car),
             promo: getPromoByCode(request.promoCode),
             addons: [],
-            depositEnabled: false,
-            depositValue: 0,
+            depositEnabled: depositAmount > 0,
+            depositValue: depositAmount,
+            depositPaidNow: false,
             payOption: 'partial',
           });
           await updateBookingRequest({ ...request, status: 'confirmed' });

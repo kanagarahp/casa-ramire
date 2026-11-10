@@ -50,6 +50,9 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
       deposit: Number(settings.depositDefault) || 500000,
       parkingCapacity: getParkingCapacity(),
       carDailyFee: getCarDailyFee(),
+      bankName: String(settings.bankName || 'Bank Mandiri').trim(),
+      bankAccountNumber: String(settings.bankAccountNumber || '700013745877').trim(),
+      bankAccountName: String(settings.bankAccountName || 'ERNY KURNIAWATI').trim(),
     },
     pricing: {
       lantai1: { ...(state.pricing?.lantai1 || {}) },
@@ -259,6 +262,7 @@ export async function fetchLiveAvailability() {
       availability: payload.availability,
       parking: payload.parking || null,
       pricing: payload.pricing || null,
+      bank: payload.bank || null,
       rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
     };
   } catch {

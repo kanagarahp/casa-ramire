@@ -47,7 +47,7 @@ async function postPaymentLink(payload) {
     const message = String(result.error || 'Gagal membuat link pembayaran DOKU.');
     if (/PAYMENT CHANNEL IS INACTIVE/i.test(message)) {
       throw new Error(
-        'Channel DOKU masih nonaktif. Aktifkan QRIS/VA/e-wallet di DOKU Back Office terlebih dahulu.',
+        'Channel DOKU masih nonaktif. Aktifkan kanal pembayaran di DOKU Back Office terlebih dahulu.',
       );
     }
     if (/sinkronisasi/i.test(message)) {

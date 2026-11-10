@@ -179,6 +179,24 @@ export function openSettingsModal() {
                 <input id="set-notification-email" type="email" class="input" value="${esc(settings.notificationEmail || 'casaramirejogja@gmail.com')}" placeholder="casaramirejogja@gmail.com" />
                 <p class="hint mt-1">Booking online, tagihan H-7, konfirmasi pembayaran/DP, dan kode reset password owner dikirim ke email ini.</p>
               </div>
+              <div class="rounded-xl border border-line bg-cream/60 p-3 space-y-3">
+                <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">Rekening pembayaran</p>
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="label" for="set-bank-name">Nama bank</label>
+                    <input id="set-bank-name" type="text" class="input" value="${esc(settings.bankName || 'Bank Mandiri')}" placeholder="Bank Mandiri" />
+                  </div>
+                  <div>
+                    <label class="label" for="set-bank-account-name">Nama pemilik rekening</label>
+                    <input id="set-bank-account-name" type="text" class="input" value="${esc(settings.bankAccountName || 'ERNY KURNIAWATI')}" placeholder="ERNY KURNIAWATI" />
+                  </div>
+                </div>
+                <div>
+                  <label class="label" for="set-bank-account-number">Nomor rekening</label>
+                  <input id="set-bank-account-number" type="text" inputmode="numeric" class="input font-mono" value="${esc(settings.bankAccountNumber || '700013745877')}" placeholder="700013745877" />
+                </div>
+                <p class="hint">Rekening ini tampil di landing page, email booking online, tagihan, dan pengingat H-7.</p>
+              </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <div>
                   <label class="label" for="set-parking-capacity">Kapasitas parkir mobil</label>
@@ -194,7 +212,7 @@ export function openSettingsModal() {
               <div>
                 <label class="label" for="set-payment-instructions">Instruksi pembayaran di email</label>
                 <textarea id="set-payment-instructions" rows="3" class="input" placeholder="cth: Transfer BCA 1234567890 a.n. Casa Ramire, lalu kirim bukti ke WhatsApp admin.">${esc(settings.paymentInstructions || '')}</textarea>
-                <p class="hint mt-1">Dikirim bersama tagihan. Jika kosong, email memakai instruksi umum (transfer bank/QRIS dan konfirmasi ke admin).</p>
+                <p class="hint mt-1">Dikirim bersama tagihan dan booking online. Jika kosong, sistem otomatis memakai rekening di atas.</p>
               </div>
               <label class="flex items-start gap-3 rounded-xl border border-line bg-cream/60 p-3 cursor-pointer">
                 <input id="set-doku-enabled" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" ${settings.dokuEnabled ? 'checked' : ''} />
@@ -293,6 +311,9 @@ export function openSettingsModal() {
         event.preventDefault();
         updateSettings({
           notificationEmail: el.querySelector('#set-notification-email').value,
+          bankName: el.querySelector('#set-bank-name').value,
+          bankAccountName: el.querySelector('#set-bank-account-name').value,
+          bankAccountNumber: el.querySelector('#set-bank-account-number').value,
           parkingCapacity: el.querySelector('#set-parking-capacity').value,
           carDailyFee: el.querySelector('#set-car-daily').value,
           paymentInstructions: el.querySelector('#set-payment-instructions').value,

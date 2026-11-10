@@ -23,6 +23,7 @@ import {
   openCheckoutModal,
   openExtendModal,
   openMoveBookingModal,
+  openVerifyBookingPaymentModal,
 } from './booking-modal.js';
 import { openTenantDetail } from './tenant-detail.js';
 
@@ -42,8 +43,11 @@ function actionsFor(room) {
     `;
   }
   if (room.status === 'booking') {
+    const paid =
+      room.booking?.paymentStatus === 'paid' || room.booking?.payOption === 'full';
     return `
       <button type="button" class="btn-primary btn-xs" data-action="checkin-flow" data-id="${room.id}">${icon('LogIn', 'w-3 h-3')} Check-in</button>
+      <button type="button" class="${paid ? 'btn-outline' : 'btn-gold'} btn-xs" data-action="verify" data-id="${room.id}">${icon(paid ? 'BadgeCheck' : 'ShieldCheck', 'w-3 h-3')} ${paid ? 'Lunas' : 'Verifikasi'}</button>
       <button type="button" class="btn-outline btn-xs" data-action="edit" data-id="${room.id}">${icon('Pencil', 'w-3 h-3')} Edit</button>
       <button type="button" class="btn-outline btn-xs" data-action="move" data-id="${room.id}">${icon('Repeat', 'w-3 h-3')} Pindah</button>
       <button type="button" class="btn-ghost btn-xs text-rose-600" data-action="cancel" data-id="${room.id}" title="Batalkan booking">${icon('X', 'w-3.5 h-3.5')}</button>
@@ -78,7 +82,8 @@ function cardHtml(room) {
         ${name ? `<div class="flex justify-between gap-2"><span class="text-stone-500">${room.status === 'terisi' ? 'Penghuni' : 'Tamu'}</span><b class="text-stone-800 text-right">${esc(name)}</b></div>` : ''}
         ${
           booking
-            ? `<div class="flex justify-between gap-2"><span class="text-stone-500">Periode</span><b class="text-stone-800 text-right">${esc(booking.startDate)} — ${esc(booking.endDate)}</b></div>`
+            ? `<div class="flex justify-between gap-2"><span class="text-stone-500">Periode</span><b class="text-stone-800 text-right">${esc(booking.startDate)} — ${esc(booking.endDate)}</b></div>
+               <div class="flex justify-between gap-2"><span class="text-stone-500">Pembayaran</span><span class="${booking.paymentStatus === 'paid' || booking.payOption === 'full' ? 'badge-green' : 'badge-amber'}">${booking.paymentStatus === 'paid' || booking.payOption === 'full' ? 'Lunas' : 'Belum bayar'}</span></div>`
             : ''
         }
       </div>
@@ -163,6 +168,7 @@ export function render(root) {
     if (action === 'checkin-flow') openCheckinFlow(room.id);
     if (action === 'edit') openBookingModal(room.id, 'edit_booking');
     if (action === 'move') openMoveBookingModal(room.id);
+    if (action === 'verify') openVerifyBookingPaymentModal(room.id);
     if (action === 'detail') openTenantDetail(id);
     if (action === 'extend') openExtendModal(id);
     if (action === 'checkout') openCheckoutModal(id);

@@ -79,7 +79,17 @@ export async function notifyBookingSaved({ room, booking, email = '', isNew = tr
         : `Perubahan Booking Kamar ${room?.nomor || booking.roomNumber || ''}`;
 
   const addons = Array.isArray(booking.addons) ? booking.addons : [];
-  const depositPaid = toNumber(booking.depositPaid);
+  const settings = getState().settings || {};
+  const bank = {
+    bankName: String(settings.bankName || 'Bank Mandiri'),
+    accountNumber: String(settings.bankAccountNumber || '700013745877'),
+    accountName: String(settings.bankAccountName || 'ERNY KURNIAWATI'),
+  };
+  const rent = toNumber(booking.grandTotal);
+  const deposit = toNumber(booking.deposit);
+  const totalDue = rent + deposit;
+  const paidInFull =
+    booking.paymentStatus === 'paid' || booking.payOption === 'full';
   const lines = [
     `Halo ${booking.name || 'Kak'},`,
     '',
@@ -87,12 +97,25 @@ export async function notifyBookingSaved({ room, booking, email = '', isNew = tr
     `Kamar: ${room?.nomor || booking.roomNumber || '—'}`,
     `Tipe: ${room?.tipe || booking.tipe || 'Deluxe'}`,
     `Periode: ${formatDate(booking.startDate)} — ${formatDate(booking.endDate)}`,
-    `Total sewa: ${rupiah(booking.grandTotal)}`,
-    depositPaid > 0
-      ? `Deposit/DP diterima: ${rupiah(depositPaid)}`
-      : booking.deposit > 0
-        ? `Deposit: ${rupiah(booking.deposit)} (belum dibayar)`
-        : null,
+    `Total sewa: ${rupiah(rent)}`,
+    deposit > 0
+      ? `Deposit (dikembalikan saat check-out): ${rupiah(deposit)}`
+      : null,
+    deposit > 0 ? `Total sewa + deposit: ${rupiah(totalDue)}` : null,
+    paidInFull
+      ? `Pembayaran diterima: ${rupiah(toNumber(booking.amountPaid) || totalDue)}`
+      : 'Status pembayaran: belum diterima',
+    !paidInFull
+      ? [
+          '',
+          'Silakan transfer ke:',
+          bank.bankName,
+          `No. Rekening: ${bank.accountNumber}`,
+          `a.n. ${bank.accountName}`,
+          '',
+          'Setelah transfer, kirim bukti pembayaran ke WhatsApp admin Casa Ramire.',
+        ].join('\n')
+      : null,
     addons.length
       ? `Add-on: ${addons.map((addon) => `${addon.name} (${rupiah(addon.price)})`).join(', ')}`
       : null,
@@ -147,6 +170,47 @@ export async function notifyPaymentConfirmed({ kind = 'bill', record, method = '
     includeAdminCopy: Boolean(recipient),
   });
 
+  return { sent: results.some((result) => result.sent), results };
+}
+
+/** Follow up an unpaid booking with the transfer amount and bank details. */
+export async function notifyBookingPaymentReminder({ room, booking }) {
+  if (!booking) return { sent: false, reason: 'booking-missing' };
+  const settings = getState().settings || {};
+  const bank = {
+    bankName: String(settings.bankName || 'Bank Mandiri'),
+    accountNumber: String(settings.bankAccountNumber || '700013745877'),
+    accountName: String(settings.bankAccountName || 'ERNY KURNIAWATI'),
+  };
+  const recipient = normalizeEmail(booking.email || '');
+  const rent = toNumber(booking.grandTotal);
+  const deposit = toNumber(booking.deposit);
+  const totalDue = rent + deposit;
+  const text = [
+    `Halo ${booking.name || 'Kak'},`,
+    '',
+    `Pengingat Pembayaran Booking — ${propertyName()}`,
+    `Kamar: ${room?.nomor || booking.roomNumber || '—'}`,
+    `Periode: ${formatDate(booking.startDate)} — ${formatDate(booking.endDate)}`,
+    `Total sewa: ${rupiah(rent)}`,
+    `Deposit (dikembalikan saat check-out): ${rupiah(deposit)}`,
+    `Total yang perlu dibayar: ${rupiah(totalDue)}`,
+    '',
+    'Transfer ke:',
+    bank.bankName,
+    `No. Rekening: ${bank.accountNumber}`,
+    `a.n. ${bank.accountName}`,
+    '',
+    'Setelah transfer, kirim bukti pembayaran ke WhatsApp admin Casa Ramire.',
+    ...signature().split('\n'),
+  ].join('\n');
+
+  const results = await sendWithAdminCopy({
+    to: recipient || getNotificationEmail(),
+    subject: `Pengingat Pembayaran Booking Kamar ${room?.nomor || ''}`.trim(),
+    text,
+    includeAdminCopy: Boolean(recipient),
+  });
   return { sent: results.some((result) => result.sent), results };
 }
 

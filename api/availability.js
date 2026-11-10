@@ -115,6 +115,15 @@ export default async function handler(req, res) {
         lantai2: { ...(state?.pricing?.lantai2 || {}) },
         lantai3: { ...(state?.pricing?.lantai3 || {}) },
       },
+      bank: {
+        bankName: String(state?.settings?.bankName || 'Bank Mandiri'),
+        bankAccountNumber: String(
+          state?.settings?.bankAccountNumber || '700013745877',
+        ),
+        bankAccountName: String(
+          state?.settings?.bankAccountName || 'ERNY KURNIAWATI',
+        ),
+      },
       rooms,
     });
   } catch (error) {

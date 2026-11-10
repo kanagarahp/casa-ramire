@@ -19,6 +19,15 @@ export function normalizePublicState(input) {
   const carDailyFee = Math.floor(Number(state.settings.carDailyFee));
   state.settings.carDailyFee =
     Number.isFinite(carDailyFee) && carDailyFee >= 0 ? carDailyFee : 10000;
+  if (!String(state.settings.bankName || '').trim()) {
+    state.settings.bankName = 'Bank Mandiri';
+  }
+  if (!String(state.settings.bankAccountNumber || '').trim()) {
+    state.settings.bankAccountNumber = '700013745877';
+  }
+  if (!String(state.settings.bankAccountName || '').trim()) {
+    state.settings.bankAccountName = 'ERNY KURNIAWATI';
+  }
 
   state.pricing = state.pricing || {};
   state.pricing.lantai1 = {

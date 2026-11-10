@@ -87,7 +87,19 @@ export function renderBillingEmail({
   roomNumber,
   propertyName = 'Casa Ramire',
   paymentInstructions = '',
+  bankName = 'Bank Mandiri',
+  bankAccountNumber = '700013745877',
+  bankAccountName = 'ERNY KURNIAWATI',
 }) {
+  const instructions =
+    String(paymentInstructions || '').trim() ||
+    [
+      `Transfer ke ${bankName}`,
+      `No. Rekening: ${bankAccountNumber}`,
+      `a.n. ${bankAccountName}`,
+      '',
+      'Setelah transfer, kirim bukti pembayaran ke WhatsApp admin Casa Ramire.',
+    ].join('\n');
   const lines = [
     `Halo ${name || 'Kak'},`,
     '',
@@ -97,8 +109,7 @@ export function renderBillingEmail({
     `Nominal: ${rupiah(amount)}`,
     dueDate ? `Jatuh tempo: ${formatDate(dueDate)}` : null,
     '',
-    paymentInstructions ||
-      'Silakan lakukan pembayaran melalui transfer bank atau QRIS. Setelah membayar, kirim bukti pembayaran ke admin Casa Ramire.',
+    instructions,
     '',
     propertyName,
   ].filter((line) => line !== null && line !== undefined);

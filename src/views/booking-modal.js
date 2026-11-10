@@ -16,21 +16,27 @@ import {
   getRoom,
   getRooms,
   getTenant,
+  markBookingPaymentUnpaid,
   markRenewalPending,
   moveBooking,
   moveTenant,
   saveBooking,
+  verifyBookingPayment,
 } from '../services/property.js';
 import { getDepositAccount, refundDeposit } from '../services/deposit.js';
 import { createRenewalPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { computeQuote, getDepositDefault, getPromo, getPromos, hasCarAddon } from '../services/pricing.js';
 import { getCarParkingStatus } from '../services/parking.js';
-import { isDokuEnabled } from '../services/settings.js';
+import { getBankDetails, isDokuEnabled } from '../services/settings.js';
 import { periodsForRoom, roomType } from '../services/daily.js';
-import { notifyBookingSaved } from '../services/notifications.js';
+import {
+  notifyBookingPaymentReminder,
+  notifyBookingSaved,
+  notifyPaymentConfirmed,
+} from '../services/notifications.js';
 import { esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { openModal } from '../ui/modal.js';
+import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 
 const isShortPeriod = (periode) => periode === 'harian' || periode === 'mingguan';
@@ -92,7 +98,10 @@ function summaryBody(quote, mode) {
       : '',
     `<div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-bold text-stone-700">${totalLabel}</span><span class="font-extrabold text-stone-800">${rupiah(quote.grandTotal)}</span></div>`,
     quote.deposit > 0
-      ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Deposit (jaminan)</span><span class="font-bold">${rupiah(quote.deposit)}</span></div>`
+      ? `<div class="flex justify-between gap-3"><span class="text-stone-500 flex items-center gap-1">Deposit <span class="w-4 h-4 rounded-full bg-amber-100 text-amber-800 font-black text-[9px] inline-flex items-center justify-center" title="Deposit dikembalikan saat check-out.">i</span></span><span class="font-bold">${rupiah(quote.deposit)}</span></div>`
+      : '',
+    quote.deposit > 0
+      ? `<div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-bold text-stone-700">Total sewa + deposit</span><span class="font-black text-stone-900">${rupiah(Number(quote.grandTotal) + Number(quote.deposit))}</span></div>`
       : '',
     quote.deposit > 0 && !quote.depositPaid
       ? `<div class="flex justify-between gap-3 text-amber-800"><span>Deposit belum dibayar</span><span class="font-bold">${rupiah(quote.deposit)}</span></div>`
@@ -138,6 +147,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
   const isExtend = mode === 'extend';
   const allowedPeriods = isExtend ? periodsForRoom(room) : periodsForRoom(room);
   const parking = getCarParkingStatus({ excludeRoomId: room.id });
+  const bank = getBankDetails();
 
   if (isExtend && !tenant) {
     toast('Data penghuni tidak ditemukan.', 'error');
@@ -169,11 +179,6 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
     : booking?.deposit ?? getDepositDefault();
   const initialPayOption = isExtend ? 'full' : booking?.payOption || (mode === 'checkin' ? 'full' : 'partial');
   const initialDepositEnabled = isExtend ? false : booking ? booking.deposit > 0 : true;
-  const initialDepositPaid = isExtend
-    ? false
-    : booking && booking.deposit > 0
-      ? Number(booking.depositPaid) > 0
-      : true;
 
   const guestSection = isExtend
     ? `
@@ -284,27 +289,46 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
               </label>
               <div id="bm-deposit-wrap" class="${initialDepositEnabled ? '' : 'hidden'} space-y-2">
                 <input id="bm-deposit" type="number" min="0" step="1000" class="input input-sm" placeholder="Nominal deposit" value="${toNumber(initialDeposit) || ''}" />
-                <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl border border-line bg-white">
-                  <input id="bm-deposit-paid" type="checkbox" class="w-4 h-4 accent-brand" ${initialDepositPaid ? 'checked' : ''} />
-                  <span class="text-[11px] font-bold text-stone-700">Deposit sudah dibayar / diterima</span>
-                </label>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
+                  <span class="w-4 h-4 rounded-full bg-amber-200 text-amber-900 font-black text-[9px] flex items-center justify-center shrink-0 mt-0.5" title="Deposit adalah uang jaminan, bukan biaya sewa.">i</span>
+                  <span>Deposit dibayar di awal bersama sewa dan <b>dikembalikan saat check-out</b>. Tidak ada pembayaran deposit terpisah saat check-in.</span>
+                </div>
               </div>
-              <p class="hint">Deposit adalah uang jaminan, bukan DP sewa. Tidak dihitung sebagai pendapatan dan dikembalikan saat check-out sesuai ketentuan.</p>
+              <p class="hint">Deposit adalah uang jaminan, bukan DP sewa. Tidak dihitung sebagai pendapatan.</p>
             </div>
           `
         }
         <div class="rounded-2xl border border-line bg-white p-4 space-y-2">
-          <p class="text-xs font-bold text-stone-800">Opsi pembayaran sewa</p>
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-xs font-bold text-stone-800">Status pembayaran</p>
+            ${
+              booking
+                ? `<span class="${booking.paymentStatus === 'paid' || booking.payOption === 'full' ? 'badge-green' : 'badge-amber'}">${booking.paymentStatus === 'paid' || booking.payOption === 'full' ? 'Lunas' : 'Belum bayar'}</span>`
+                : ''
+            }
+          </div>
           <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl border border-line hover:bg-stone-50">
             <input type="radio" name="bm-pay-option" value="partial" class="accent-brand" ${initialPayOption === 'partial' ? 'checked' : ''} />
-            <span class="text-xs font-semibold">${isExtend ? 'Catat sebagai tagihan' : 'Sewa belum dibayar (buat tagihan)'}</span>
+            <span class="text-xs font-semibold">${isExtend ? 'Catat sebagai tagihan' : 'Belum dibayar — admin follow up'}</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer p-2 rounded-xl border border-line hover:bg-stone-50">
             <input type="radio" name="bm-pay-option" value="full" class="accent-brand" ${initialPayOption === 'full' ? 'checked' : ''} />
-            <span class="text-xs font-semibold">${isExtend ? 'Lunas sekarang' : 'Sewa lunas sekarang'}</span>
+            <span class="text-xs font-semibold">${isExtend ? 'Lunas sekarang' : 'Sudah dibayar penuh (sewa + deposit)'}</span>
           </label>
+          <p class="hint">Pembayaran booking dikonfirmasi lewat tombol <b>Verifikasi</b> di kartu kamar setelah dana masuk.</p>
         </div>
       </div>
+
+      ${
+        isExtend
+          ? ''
+          : `<div class="rounded-2xl border border-brand/20 bg-brand-50/50 p-4 text-xs">
+              <p class="text-[10px] font-extrabold uppercase tracking-wider text-brand">Info transfer ke tamu</p>
+              <p class="font-black text-stone-800 mt-1">${esc(bank.bankName)} · <span class="font-mono">${esc(bank.accountNumber)}</span></p>
+              <p class="text-[11px] text-stone-600 mt-0.5">a.n. ${esc(bank.accountName)}</p>
+              <p class="text-[11px] text-stone-600 mt-1.5">Tamu mentransfer <b>sewa + deposit</b>. Deposit dikembalikan saat check-out. Setelah dana masuk, gunakan tombol <b>Verifikasi</b> pada kartu kamar.</p>
+            </div>`
+      }
 
       ${
         isExtend
@@ -346,7 +370,6 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
       const endInput = el.querySelector('#bm-end');
       const endWrap = el.querySelector('#bm-end-wrap');
       const depositToggle = el.querySelector('#bm-deposit-enabled');
-      const depositPaidToggle = el.querySelector('#bm-deposit-paid');
       const depositWrap = el.querySelector('#bm-deposit-wrap');
       const promoSelect = el.querySelector('#bm-promo');
 
@@ -384,7 +407,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
             addons,
             depositEnabled: Boolean(depositToggle?.checked),
             depositValue: toNumber(value('#bm-deposit')),
-            depositPaid: Boolean(depositPaidToggle?.checked),
+            depositPaid: getPayOption() === 'full',
             payOption: getPayOption(),
           });
         } catch (error) {
@@ -478,7 +501,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
         addons,
         depositEnabled: Boolean(depositToggle?.checked),
         depositValue: toNumber(value('#bm-deposit')),
-        depositPaidNow: Boolean(depositPaidToggle?.checked),
+        depositPaidNow: getPayOption() === 'full',
         payOption: getPayOption(),
         notes: value('#bm-notes'),
         emergencyContact: {
@@ -574,6 +597,139 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
   });
 }
 
+/** Verify booking rent + deposit after the guest transfers the money. */
+export function openVerifyBookingPaymentModal(roomId) {
+  const room = getRoom(roomId);
+  const booking = room?.booking;
+  if (!room || !booking) {
+    toast('Booking tidak ditemukan.', 'error');
+    return;
+  }
+
+  const rent = toNumber(booking.grandTotal);
+  const deposit = toNumber(booking.deposit);
+  const totalDue = rent + deposit;
+  const paid =
+    booking.paymentStatus === 'paid' || booking.payOption === 'full';
+
+  openModal({
+    title: paid ? 'Pembayaran Booking Lunas' : 'Verifikasi Pembayaran Booking',
+    subtitle: `${booking.name} • Kamar ${room.nomor}`,
+    size: 'md',
+    body: `
+      <div class="space-y-4">
+        <div class="rounded-2xl border border-line bg-cream/60 p-4 text-xs space-y-2">
+          <div class="flex justify-between gap-3"><span class="text-stone-500">Nama</span><b class="text-stone-800">${esc(booking.name)}</b></div>
+          <div class="flex justify-between gap-3"><span class="text-stone-500">Email</span><b class="text-stone-800 break-all text-right">${esc(booking.email || '—')}</b></div>
+          <div class="flex justify-between gap-3"><span class="text-stone-500">Total sewa</span><b class="text-stone-800">${rupiah(rent)}</b></div>
+          <div class="flex justify-between gap-3"><span class="text-stone-500">Deposit (dikembalikan saat check-out)</span><b class="text-stone-800">${rupiah(deposit)}</b></div>
+          <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="font-bold text-stone-700">Total transfer</span><b class="text-base font-black text-stone-900">${rupiah(totalDue)}</b></div>
+          <div class="flex justify-between gap-3"><span class="text-stone-500">Status</span><span class="${paid ? 'badge-green' : 'badge-amber'}">${paid ? 'Lunas / terverifikasi' : 'Belum bayar'}</span></div>
+          ${booking.paidAt ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Diverifikasi</span><b class="text-stone-800">${formatDate(booking.paidAt)}</b></div>` : ''}
+        </div>
+
+        ${
+          paid
+            ? `<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-800 flex items-start gap-2">
+                ${icon('CheckCircle2', 'w-4 h-4 shrink-0 mt-0.5')}
+                <span>Pembayaran booking sudah diverifikasi${booking.paymentMethod ? ` via <b>${esc(booking.paymentMethod)}</b>` : ''}.</span>
+              </div>`
+            : `
+            <div>
+              <label class="label" for="bv-method">Metode pembayaran</label>
+              <select id="bv-method" class="select">
+                ${PAYMENT_METHODS.map((method) => `<option value="${esc(method)}">${esc(method)}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="label" for="bv-note">Catatan / referensi transfer</label>
+              <input id="bv-note" type="text" class="input" placeholder="cth: transfer a.n. Budi / no. referensi" />
+            </div>
+            <p class="hint">Verifikasi ini menandai sewa + deposit sudah diterima. Deposit tetap dicatat sebagai jaminan dan dikembalikan saat check-out.</p>
+            `
+        }
+      </div>
+    `,
+    footer: `
+      <button type="button" class="btn-outline btn-sm" data-modal-close>Tutup</button>
+      ${
+        paid
+          ? `<button type="button" class="btn-danger-soft btn-sm" data-unverify-booking>Batalkan verifikasi</button>`
+          : `<button type="button" class="btn-outline btn-sm" data-remind-booking>${icon('Send', 'w-4 h-4')} Follow Up Pembayaran</button>
+             <button type="button" class="btn-primary btn-sm" data-verify-booking>${icon('ShieldCheck', 'w-4 h-4')} Verifikasi & Tandai Lunas</button>`
+      }
+    `,
+    onMount(el, close) {
+      el.querySelector('[data-remind-booking]')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          const result = await notifyBookingPaymentReminder({ room, booking });
+          toast(
+            result.sent
+              ? `Pengingat pembayaran dikirim ke ${booking.email || 'email admin'}.`
+              : 'Pengingat tersimpan, tetapi email belum terkirim. Periksa konfigurasi email.',
+            result.sent ? 'success' : 'warning',
+          );
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      el.querySelector('[data-verify-booking]')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        const method = el.querySelector('#bv-method')?.value || 'Transfer Bank Mandiri';
+        const note = el.querySelector('#bv-note')?.value.trim() || '';
+        button.disabled = true;
+        try {
+          verifyBookingPayment(room.id, { method, note });
+          const updated = getRoom(room.id);
+          toast('Pembayaran booking berhasil diverifikasi.');
+          void notifyPaymentConfirmed({
+            kind: 'bill',
+            record: {
+              number: `BOOK-${updated.nomor}`,
+              type: 'Booking Kamar',
+              item: `Sewa + deposit kamar ${updated.nomor}`,
+              tenantName: booking.name,
+              email: booking.email,
+              roomNumber: updated.nomor,
+              amount: totalDue,
+              paid: totalDue,
+            },
+            method,
+            note,
+          });
+          close();
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      el.querySelector('[data-unverify-booking]')?.addEventListener('click', async () => {
+        const approved = await confirmAction({
+          title: 'Batalkan verifikasi pembayaran?',
+          message: 'Status booking akan kembali menjadi <b>belum bayar</b>. Riwayat deposit booking ikut dibatalkan.',
+          confirmText: 'Ya, batalkan',
+          danger: true,
+        });
+        if (!approved) return;
+        try {
+          markBookingPaymentUnpaid(room.id);
+          toast('Verifikasi pembayaran booking dibatalkan.', 'warning');
+          close();
+        } catch (error) {
+          toast(error.message, 'error');
+        }
+      });
+    },
+  });
+}
+
 /** Check-in confirmation (handles outstanding rent before check-in). */
 export function openCheckinFlow(roomId) {
   const room = getRoom(roomId);
@@ -583,8 +739,14 @@ export function openCheckinFlow(roomId) {
     return;
   }
 
-  const paid = booking.payOption === 'full' ? booking.grandTotal : 0;
+  const bookingPaid =
+    booking.paymentStatus === 'paid' || booking.payOption === 'full';
+  const paid = bookingPaid ? toNumber(booking.grandTotal) : 0;
   const remaining = Math.max(0, toNumber(booking.grandTotal) - paid);
+  const depositRemaining = bookingPaid
+    ? 0
+    : Math.max(0, toNumber(booking.deposit) - toNumber(booking.depositPaid));
+  const totalOutstanding = remaining + depositRemaining;
 
   openModal({
     title: `Check-in ${booking.name}`,
@@ -598,26 +760,28 @@ export function openCheckinFlow(roomId) {
           <div class="flex justify-between"><span class="text-stone-500">Email</span><b class="text-stone-800">${esc(booking.email || '—')}</b></div>
           <div class="flex justify-between"><span class="text-stone-500">Periode</span><b class="text-stone-800">${formatDate(booking.startDate)} — ${formatDate(booking.endDate)}</b></div>
           <div class="flex justify-between"><span class="text-stone-500">Total sewa</span><b class="text-stone-800">${rupiah(booking.grandTotal)}</b></div>
-          <div class="flex justify-between"><span class="text-stone-500">Deposit</span><b class="text-stone-800">${rupiah(booking.deposit)}</b></div>
-          <div class="flex justify-between pt-2 border-t border-line"><span class="text-stone-500">Sisa sewa</span><b class="${remaining > 0 ? 'text-rose-700' : 'text-emerald-700'}">${rupiah(remaining)}</b></div>
+          <div class="flex justify-between"><span class="text-stone-500">Deposit (dikembalikan saat check-out)</span><b class="text-stone-800">${rupiah(booking.deposit)}</b></div>
+          <div class="flex justify-between"><span class="text-stone-500">Sisa sewa</span><b class="${remaining > 0 ? 'text-rose-700' : 'text-emerald-700'}">${rupiah(remaining)}</b></div>
+          <div class="flex justify-between"><span class="text-stone-500">Deposit belum dibayar</span><b class="${depositRemaining > 0 ? 'text-rose-700' : 'text-emerald-700'}">${rupiah(depositRemaining)}</b></div>
+          <div class="flex justify-between pt-2 border-t border-line"><span class="text-stone-500">Total belum dibayar</span><b class="${totalOutstanding > 0 ? 'text-rose-700' : 'text-emerald-700'}">${rupiah(totalOutstanding)}</b></div>
         </div>
         ${
-          remaining > 0
+          totalOutstanding > 0
             ? `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2">
                 ${icon('AlertTriangle', 'w-4 h-4 shrink-0 mt-0.5')}
-                <span>Booking ini baru membayar deposit. Pilih <b>Tandai lunas</b> jika sisa sewa sudah diterima, atau <b>Check-in & tagih sisa</b> untuk mencatat tagihan.</span>
+                <span>Pembayaran booking belum diterima penuh. Pilih <b>Tandai lunas & check-in</b> jika sewa + deposit sudah diterima, atau <b>Check-in & tagih sisa</b> agar kekurangan dicatat sebagai tagihan.</span>
               </div>`
             : `<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-800 flex items-start gap-2">
                 ${icon('CheckCircle2', 'w-4 h-4 shrink-0 mt-0.5')}
-                <span>Sewa sudah lunas. Penghuni siap check-in.</span>
+                <span>Sewa dan deposit sudah lunas. Penghuni siap check-in.</span>
               </div>`
         }
       </div>
     `,
     footer: `
       <button type="button" class="btn-outline btn-sm" data-modal-close>Batal</button>
-      ${remaining > 0 ? `<button type="button" class="btn-outline btn-sm" data-checkin-unpaid>Check-in & tagih sisa</button>` : ''}
-      <button type="button" class="btn-primary btn-sm" data-checkin-settle>${icon('Check', 'w-4 h-4')} ${remaining > 0 ? 'Tandai lunas & check-in' : 'Check-in sekarang'}</button>
+      ${totalOutstanding > 0 ? `<button type="button" class="btn-outline btn-sm" data-checkin-unpaid>Check-in & tagih sisa</button>` : ''}
+      <button type="button" class="btn-primary btn-sm" data-checkin-settle>${icon('Check', 'w-4 h-4')} ${totalOutstanding > 0 ? 'Tandai lunas & check-in' : 'Check-in sekarang'}</button>
     `,
     onMount(el, close) {
       const doCheckin = (settle) => {
