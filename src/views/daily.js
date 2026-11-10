@@ -11,7 +11,7 @@ import {
 import { getCarParkingStatus } from '../services/parking.js';
 import { getRate } from '../services/pricing.js';
 import { cancelBooking, getTenant } from '../services/property.js';
-import { getCarDailyFee, getParkingCapacity, updateSettings } from '../services/settings.js';
+import { getParkingCapacity, updateSettings } from '../services/settings.js';
 import { statusBadge, emptyState, pageHeader, statCard } from '../ui/components.js';
 import { delegate, esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -264,11 +264,7 @@ function openParkingModal() {
                 <label class="label" for="pk-capacity">Kapasitas maksimal mobil</label>
                 <input id="pk-capacity" type="number" min="1" step="1" class="input" value="${getParkingCapacity()}" />
               </div>
-              <div>
-                <label class="label" for="pk-daily">Tarif parkir harian (Rp/hari)</label>
-                <input id="pk-daily" type="number" min="0" step="1000" class="input" value="${getCarDailyFee()}" />
-              </div>
-              <p class="hint">Perubahan ini juga dipakai pada estimasi booking online.</p>
+              <p class="hint">Tarif parkir mobil flat Rp130.000. Perubahan kapasitas juga dipakai pada estimasi booking online.</p>
             </form>`
             : `<p class="hint">Hubungi owner untuk mengubah kapasitas parkir.</p>`
         }
@@ -283,7 +279,6 @@ function openParkingModal() {
         try {
           updateSettings({
             parkingCapacity: el.querySelector('#pk-capacity').value,
-            carDailyFee: el.querySelector('#pk-daily').value,
           });
           toast('Pengaturan parkir disimpan.');
           close();

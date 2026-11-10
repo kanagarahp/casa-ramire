@@ -1,5 +1,4 @@
 import { CAR_ADDON_NAME, CAR_FEE, PERIODS } from '../core/constants.js';
-import { getCarDailyFee } from './settings.js';
 import {
   addDays,
   addMonths,
@@ -107,12 +106,10 @@ export function computeQuote({
   const discount = Math.min(base, Math.max(0, Math.round(grossDiscount)));
 
   const addonMonthly = (addons || []).reduce((sum, addon) => sum + toNumber(addon.price), 0);
-  const carAddons = (addons || []).filter((addon) => hasCarAddon([addon]));
-  const carAddonMonthly = carAddons.reduce((sum, addon) => sum + toNumber(addon.price), 0);
-  const otherAddonMonthly = Math.max(0, addonMonthly - carAddonMonthly);
-  const carTotal = carAddons.length ? getCarDailyFee() * units : 0;
+  // Add-on (termasuk parkir mobil) memakai satu tarif flat untuk sewa
+  // harian/mingguan; hanya paket bulanan yang dikalikan jumlah bulan.
   const addonTotal =
-    period.kind === 'months' ? addonMonthly * period.months : otherAddonMonthly + carTotal;
+    period.kind === 'months' ? addonMonthly * period.months : addonMonthly;
 
   const rentTotal = Math.max(0, base - discount);
   const grandTotal = rentTotal + addonTotal;

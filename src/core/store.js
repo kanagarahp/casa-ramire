@@ -1,5 +1,4 @@
 import {
-  CAR_DAILY_FEE,
   CAR_FEE,
   MAX_PARKING_CARS,
   NOTIFICATION_EMAIL,
@@ -194,9 +193,8 @@ function migrate(stored) {
     Number.isFinite(parkingCapacity) && parkingCapacity > 0
       ? parkingCapacity
       : MAX_PARKING_CARS;
-  const carDailyFee = Math.floor(Number(merged.settings.carDailyFee));
-  merged.settings.carDailyFee =
-    Number.isFinite(carDailyFee) && carDailyFee >= 0 ? carDailyFee : CAR_DAILY_FEE;
+  // Parkir mobil memakai satu tarif flat (CAR_FEE), tanpa tarif harian.
+  delete merged.settings.carDailyFee;
 
   // v10: bank transfer details for landing-page bookings and billing emails.
   if (!String(merged.settings.bankName || '').trim()) {

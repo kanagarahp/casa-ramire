@@ -16,9 +16,7 @@ export function normalizePublicState(input) {
   const parkingCapacity = Math.floor(Number(state.settings.parkingCapacity));
   state.settings.parkingCapacity =
     Number.isFinite(parkingCapacity) && parkingCapacity > 0 ? parkingCapacity : 15;
-  const carDailyFee = Math.floor(Number(state.settings.carDailyFee));
-  state.settings.carDailyFee =
-    Number.isFinite(carDailyFee) && carDailyFee >= 0 ? carDailyFee : 10000;
+  delete state.settings.carDailyFee;
   if (!String(state.settings.bankName || '').trim()) {
     state.settings.bankName = 'Bank Mandiri';
   }

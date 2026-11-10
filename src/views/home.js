@@ -279,12 +279,8 @@ function quoteFor(catalog, { floor, periode, startDate, endDate, promo, car }) {
       ? (base * toNumber(promo.value)) / 100
       : toNumber(promo.value) * chargedMonths;
   const discount = Math.min(base, Math.max(0, Math.round(grossDiscount)));
-  const carRate =
-    period.kind === 'months'
-      ? CAR_FEE
-      : toNumber(catalog.property.carDailyFee) || 10000;
-  const carUnits = period.kind === 'months' ? chargedMonths : units;
-  const carTotal = car ? carRate * carUnits : 0;
+  // Satu tarif parkir mobil: Rp130.000 (flat, tidak ada tarif harian).
+  const carTotal = car ? CAR_FEE * chargedMonths : 0;
   const total = Math.max(0, base - discount) + carTotal;
 
   return {
@@ -428,7 +424,7 @@ function availabilitySection(catalog) {
               ${
                 catalog.parking?.full
                   ? `<b>Parkir mobil penuh (${catalog.parking.used}/${catalog.parking.capacity}).</b> Booking online saat ini tidak dapat menambahkan parkir mobil. Silakan hubungi admin untuk daftar tunggu.`
-                  : `<b>Membawa mobil?</b> Tambahan parkir ${rupiah(CAR_FEE)}/bulan atau ${rupiah(catalog.property.carDailyFee || 10000)}/hari. Sisa slot: <b>${catalog.parking?.available ?? catalog.property.parkingCapacity ?? 15}</b> dari ${catalog.parking?.capacity ?? 15}.`
+                  : `<b>Membawa mobil?</b> Tambahan parkir ${rupiah(CAR_FEE)}. Sisa slot: <b>${catalog.parking?.available ?? catalog.property.parkingCapacity ?? 15}</b> dari ${catalog.parking?.capacity ?? 15}.`
               }
             </div>
             ${depositInfoHtml(catalog.property.deposit || 0, { compact: true })}
@@ -483,7 +479,7 @@ function dailySection(catalog) {
                 <b>Parkir mobil penuh (${parking.used}/${parking.capacity}).</b> Booking online belum bisa menambahkan parkir mobil sampai ada slot kosong.
               </div>`
             : `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 mt-5 text-xs text-amber-900 leading-relaxed">
-                Parkir mobil tersedia <b>${parking.available ?? 15}</b> slot dari ${parking.capacity ?? 15}. Tambahan parkir mobil ${rupiah(catalog.property.carDailyFee || 10000)}/hari untuk sewa harian.
+                Parkir mobil tersedia <b>${parking.available ?? 15}</b> slot dari ${parking.capacity ?? 15}. Tambahan parkir mobil ${rupiah(CAR_FEE)}.
               </div>`
         }
 
@@ -769,7 +765,7 @@ function pageHtml(catalog, { preview }) {
             </div>
 
             <p class="hint mt-4">
-              * Harga dapat berubah sewaktu-waktu. Tambahan parkir mobil ${rupiah(CAR_FEE)}/bulan.
+              * Harga dapat berubah sewaktu-waktu. Tambahan parkir mobil ${rupiah(CAR_FEE)}.
               Deposit ${rupiah(property.deposit || 0)} dibayar di awal bersama sewa dan dikembalikan saat check-out.
             </p>
           </div>
@@ -959,7 +955,6 @@ function openBookingModal(
   const monthlyAvailable = monthlyRooms(catalog);
   const deposit = Number(catalog.property.deposit) || 0;
   const parking = catalog.parking || { capacity: 15, used: 0, full: false };
-  const carDailyFee = toNumber(catalog.property.carDailyFee) || 10000;
   const initialRoom = (catalog.rooms || []).find(
     (room) => String(room.id) === String(roomId),
   );
@@ -1063,7 +1058,7 @@ function openBookingModal(
               ${
                 parking.full
                   ? `Parkir mobil penuh (${parking.used}/${parking.capacity}). Booking online tidak dapat menambahkan parkir mobil.`
-                  : `Tambahan parkir ${rupiah(CAR_FEE)}/bulan atau ${rupiah(carDailyFee)}/hari. Sisa ${parking.available ?? parking.capacity - parking.used} slot.`
+                  : `Tambahan parkir ${rupiah(CAR_FEE)}. Sisa ${parking.available ?? parking.capacity - parking.used} slot.`
               }
             </span>
           </span>

@@ -20,7 +20,7 @@ const TEXT_FIELDS = [
 
 const BOOLEAN_FIELDS = ['dokuEnabled'];
 
-const NUMBER_FIELDS = ['parkingCapacity', 'carDailyFee'];
+const NUMBER_FIELDS = ['parkingCapacity'];
 
 function normalizeText(value) {
   return String(value ?? '').trim();
@@ -78,11 +78,6 @@ export function getNotificationEmail() {
 export function getParkingCapacity() {
   const value = Math.floor(Number(getSettings().parkingCapacity));
   return Number.isFinite(value) && value > 0 ? value : 15;
-}
-
-export function getCarDailyFee() {
-  const value = Math.floor(Number(getSettings().carDailyFee));
-  return Number.isFinite(value) && value >= 0 ? value : 10000;
 }
 
 export function getBankDetails() {

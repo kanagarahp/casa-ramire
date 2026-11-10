@@ -101,7 +101,7 @@ test('a booking can be moved to another room without deleting it', () => {
   );
 });
 
-test('daily parking fee is charged per day, not as a monthly fee', () => {
+test('parking uses one flat Rp130.000 tariff for daily stays', () => {
   fresh();
   const quote = computeQuote({
     lantai: '2',
@@ -113,7 +113,7 @@ test('daily parking fee is charged per day, not as a monthly fee', () => {
     payOption: 'partial',
   });
   assert.equal(quote.units, 3);
-  assert.equal(quote.addonTotal, 30_000);
+  assert.equal(quote.addonTotal, 130_000);
 });
 
 test('parking usage counts active cars and can be overbooked by admin', () => {

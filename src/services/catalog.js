@@ -1,6 +1,6 @@
 import { getState, update } from '../core/store.js';
 import { getCarParkingStatus } from './parking.js';
-import { getCarDailyFee, getFacilities, getParkingCapacity } from './settings.js';
+import { getFacilities, getParkingCapacity } from './settings.js';
 import { getRate, syncPromoUsage } from './pricing.js';
 
 const STATUS_LABEL = {
@@ -49,7 +49,6 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
       facilities: getFacilities(),
       deposit: Number(settings.depositDefault) || 500000,
       parkingCapacity: getParkingCapacity(),
-      carDailyFee: getCarDailyFee(),
       bankName: String(settings.bankName || 'Bank Mandiri').trim(),
       bankAccountNumber: String(settings.bankAccountNumber || '700013745877').trim(),
       bankAccountName: String(settings.bankAccountName || 'ERNY KURNIAWATI').trim(),

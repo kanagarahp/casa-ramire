@@ -8,10 +8,8 @@ export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
 export const SCHEMA_VERSION = 10;
 
-/** Flat monthly surcharge for tenants who bring a car. */
+/** Single flat surcharge for guests who bring a car. */
 export const CAR_FEE = 130000;
-/** Daily parking surcharge, used for harian/mingguan bookings. */
-export const CAR_DAILY_FEE = 10000;
 export const CAR_ADDON_NAME = 'Parkir Mobil';
 export const SESSION_KEY = 'casa-ramire:session';
 
@@ -207,7 +205,6 @@ export const DEFAULT_SETTINGS = {
   facilities: 'AC, WiFi, kasur, lemari, meja kerja, kamar mandi dalam',
   depositDefault: DEFAULT_DEPOSIT,
   parkingCapacity: MAX_PARKING_CARS,
-  carDailyFee: CAR_DAILY_FEE,
   bankName: 'Bank Mandiri',
   bankAccountNumber: '700013745877',
   bankAccountName: 'ERNY KURNIAWATI',

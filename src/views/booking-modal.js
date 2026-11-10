@@ -58,10 +58,11 @@ function addonOptionsHtml(room = null) {
   return [
     `<option value="">— Pilih layanan add-on —</option>`,
     ...addons.map((addon) => {
-      const parkingNote = hasCarAddon([addon])
+      const isCar = hasCarAddon([addon]);
+      const parkingNote = isCar
         ? ` (${parking.used}/${parking.capacity}${parking.full ? ' — PENUH' : ''})`
         : '';
-      return `<option value="${addon.id}">${esc(addon.name)} — ${rupiah(addon.price)}/bln${parkingNote}</option>`;
+      return `<option value="${addon.id}">${esc(addon.name)} — ${rupiah(addon.price)}${isCar ? ' flat' : '/bln'}${parkingNote}</option>`;
     }),
   ].join('');
 }
@@ -76,7 +77,7 @@ function addonListHtml(addons) {
       <div class="flex items-center justify-between gap-2 bg-white border border-amber-200 rounded-xl px-3 py-2">
         <div class="min-w-0">
           <p class="text-[11px] font-bold text-stone-700 truncate">${esc(addon.name)}</p>
-          <p class="text-[10px] text-stone-500">${rupiah(addon.price)} / bulan</p>
+          <p class="text-[10px] text-stone-500">${rupiah(addon.price)} ${hasCarAddon([addon]) ? 'flat' : '/ bulan'}</p>
         </div>
         <button type="button" class="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50" data-remove-addon="${index}" aria-label="Hapus ${esc(addon.name)}">
           ${icon('X', 'w-3.5 h-3.5')}

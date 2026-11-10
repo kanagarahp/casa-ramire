@@ -197,17 +197,10 @@ export function openSettingsModal() {
                 </div>
                 <p class="hint">Rekening ini tampil di landing page, email booking online, tagihan, dan pengingat H-7.</p>
               </div>
-              <div class="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label class="label" for="set-parking-capacity">Kapasitas parkir mobil</label>
-                  <input id="set-parking-capacity" type="number" min="1" step="1" class="input" value="${Number(settings.parkingCapacity) || 15}" />
-                  <p class="hint mt-1">Maksimal mobil. Booking online otomatis diblokir jika penuh.</p>
-                </div>
-                <div>
-                  <label class="label" for="set-car-daily">Tarif parkir harian (Rp/hari)</label>
-                  <input id="set-car-daily" type="number" min="0" step="1000" class="input" value="${Number(settings.carDailyFee) || 10000}" />
-                  <p class="hint mt-1">Dipakai untuk booking harian/mingguan.</p>
-                </div>
+              <div>
+                <label class="label" for="set-parking-capacity">Kapasitas parkir mobil</label>
+                <input id="set-parking-capacity" type="number" min="1" step="1" class="input" value="${Number(settings.parkingCapacity) || 15}" />
+                <p class="hint mt-1">Maksimal 15 mobil. Booking online otomatis diblokir jika penuh. Tarif parkir mobil flat Rp130.000.</p>
               </div>
               <div>
                 <label class="label" for="set-payment-instructions">Instruksi pembayaran di email</label>
@@ -315,7 +308,6 @@ export function openSettingsModal() {
           bankAccountName: el.querySelector('#set-bank-account-name').value,
           bankAccountNumber: el.querySelector('#set-bank-account-number').value,
           parkingCapacity: el.querySelector('#set-parking-capacity').value,
-          carDailyFee: el.querySelector('#set-car-daily').value,
           paymentInstructions: el.querySelector('#set-payment-instructions').value,
           dokuEnabled: el.querySelector('#set-doku-enabled').checked,
         });
