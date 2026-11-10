@@ -9,6 +9,7 @@ import {
 } from '../core/format.js';
 import { nextId } from '../core/id.js';
 import { getState, update } from '../core/store.js';
+import { dailyTotalForRange } from './daily-calendar.js';
 
 export function priceKeyForFloor(lantai) {
   const floor = String(lantai);
@@ -74,6 +75,7 @@ function monthlyPromoDiscount(monthlyRate, promo) {
  */
 export function computeQuote({
   lantai,
+  room = null,
   periode,
   startDate,
   endDate,
@@ -96,7 +98,14 @@ export function computeQuote({
   if (!rate) throw new Error('Tarif untuk periode ini belum diatur di Pricelist.');
 
   const units = unitsFor(period, start, resolvedEnd);
-  const base = period.kind === 'months' ? rate : rate * units;
+  const base =
+    period.kind === 'months'
+      ? rate
+      : period.kind === 'days'
+        ? room
+          ? dailyTotalForRange(room, start, resolvedEnd, rate)
+          : rate * units
+        : rate * units;
 
   const grossDiscount = !promo
     ? 0

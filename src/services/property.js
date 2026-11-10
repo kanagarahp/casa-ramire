@@ -3,6 +3,7 @@ import { addDays, daysBetween, toNumber, todayISO } from '../core/format.js';
 import { nextId } from '../core/id.js';
 import { getState, update } from '../core/store.js';
 import { pushBill } from './billing.js';
+import { rangeAvailability } from './daily-calendar.js';
 import { carAddon, computeQuote, hasCarAddon } from './pricing.js';
 
 function must(condition, message) {
@@ -172,6 +173,7 @@ function promoSnapshot(quote) {
 function buildQuoteFor(room, payload) {
   return computeQuote({
     lantai: room.lantai,
+    room,
     periode: payload.periode,
     startDate: payload.startDate,
     endDate: payload.endDate,
@@ -214,6 +216,11 @@ export function saveBooking(roomId, payload) {
   const guest = validateGuest(payload);
   const addons = effectiveAddons(payload);
   const quote = buildQuoteFor(room, { ...payload, addons });
+  const availability = rangeAvailability(room, quote.startDate, quote.endDate);
+  must(
+    availability.available,
+    `Kamar ${room.nomor} tidak tersedia pada tanggal ${availability.blockedDates.join(', ')}.`,
+  );
 
   update((draft) => {
     const target = draft.rooms.find((item) => String(item.id) === String(roomId));
@@ -321,6 +328,11 @@ export function moveBooking(roomId, targetRoomId) {
     depositPaid: toNumber(booking.depositPaid) > 0,
     payOption: booking.payOption === 'full' ? 'full' : 'partial',
   });
+  const availability = rangeAvailability(target, quote.startDate, quote.endDate);
+  must(
+    availability.available,
+    `Kamar ${target.nomor} tidak tersedia pada tanggal ${availability.blockedDates.join(', ')}.`,
+  );
   const depositPaid = Math.min(toNumber(booking.depositPaid), quote.deposit);
 
   update((draft) => {
@@ -584,6 +596,11 @@ export function checkInDirect(roomId, payload) {
   const guest = validateGuest(payload);
   const addons = effectiveAddons(payload);
   const quote = buildQuoteFor(room, { ...payload, addons });
+  const availability = rangeAvailability(room, quote.startDate, quote.endDate);
+  must(
+    availability.available,
+    `Kamar ${room.nomor} tidak tersedia pada tanggal ${availability.blockedDates.join(', ')}.`,
+  );
   const rentPaid = quote.payOption === 'full' ? quote.grandTotal : 0;
 
   let tenant;

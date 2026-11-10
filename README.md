@@ -15,7 +15,7 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 | **Landing Page** | Galeri foto properti (bukan katalog per kamar), jumlah & nomor kamar yang masih tersedia, pricelist per lantai, fasilitas, titik Google Maps, dan **booking online** |
 | **POS / Kasir** | Penjualan layanan (laundry, kebersihan, dll.) untuk **penghuni atau non tenant**, keranjang, diskon, bayar sekarang atau **invoice/tunggakan**, kirim email, struk cetak, riwayat transaksi; master produk & harga dikelola owner |
 | **Booking Online** | Permintaan booking dari landing page: nama, WhatsApp, email, durasi, tanggal, kontak darurat, opsi bawa mobil (+Rp130.000/bln), kamar pilihan, dan kode promo. Permintaan otomatis dikirim ke email admin. |
-| **Booking Harian** | Kamar 101 Deluxe VIP lantai 1 khusus harian + kamar bulanan kosong lantai 2/3 yang bisa dipakai harian. Owner dapat mengatur ketersediaan harian per kamar. |
+| **Booking Harian** | Kamar 101 Deluxe VIP lantai 1 khusus harian + kamar bulanan kosong lantai 2/3 yang bisa dipakai harian. Owner dapat mengatur ketersediaan dan harga kamar VIP per tanggal (weekend/peak season) lewat menu **Atur Kamar VIP**. |
 | **Pindah Kamar** | Pindahkan booking (sebelum check-in) atau penghuni aktif ke kamar lain tanpa menghapus data. Harga dihitung ulang mengikuti kamar tujuan. |
 | **Parkir Mobil** | Kapasitas maksimal 15 mobil (bisa diubah owner). Booking online diblokir saat penuh; admin/owner masih bisa menambahkan dengan peringatan overbook. |
 | **Notifikasi Email** | Booking online, tagihan POS/manual, pengingat H-7 otomatis, serta konfirmasi pembayaran/DP dikirim ke email penghuni dan inbox admin `casaramirejogja@gmail.com`. |

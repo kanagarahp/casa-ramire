@@ -31,6 +31,7 @@ export function generateRooms() {
         // Kamar bulanan yang sedang kosong boleh dipakai untuk tamu harian.
         dailyEnabled: true,
         monthlyEnabled: true,
+        dailyCalendar: {},
       });
       id += 1;
     }
@@ -50,6 +51,8 @@ export function generateRooms() {
     photoUrl: '',
     dailyEnabled: true,
     monthlyEnabled: false,
+    // Harga & status per tanggal untuk kamar VIP.
+    dailyCalendar: {},
   });
   return rooms;
 }

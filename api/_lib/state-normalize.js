@@ -49,6 +49,12 @@ export function normalizePublicState(input) {
       tipe: floor === '1' ? 'Deluxe VIP' : room.tipe || 'Deluxe',
       dailyEnabled: room.dailyEnabled !== false,
       monthlyEnabled: floor === '1' ? false : room.monthlyEnabled !== false,
+      dailyCalendar:
+        room.dailyCalendar &&
+        typeof room.dailyCalendar === 'object' &&
+        !Array.isArray(room.dailyCalendar)
+          ? room.dailyCalendar
+          : {},
     };
   });
 
@@ -67,6 +73,7 @@ export function normalizePublicState(input) {
       photoUrl: '',
       dailyEnabled: true,
       monthlyEnabled: false,
+      dailyCalendar: {},
     });
   }
 

@@ -6,7 +6,7 @@
 export const APP_NAME = 'Casa Ramire';
 export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 /** Single flat surcharge for guests who bring a car. */
 export const CAR_FEE = 130000;
@@ -219,6 +219,7 @@ export const NAV_ITEMS = [
   { path: 'pos', label: 'POS / Kasir', icon: 'ShoppingCart' },
   { path: 'bookings', label: 'Booking Online', icon: 'Inbox' },
   { path: 'daily', label: 'Booking Harian', icon: 'CalendarDays' },
+  { path: 'daily-settings', label: 'Atur Kamar VIP', icon: 'SlidersHorizontal', ownerOnly: true },
   { path: 'rooms', label: 'Status Kamar', icon: 'Building2' },
   { path: 'gallery', label: 'Galeri Landing', icon: 'Image' },
   { path: 'pricing', label: 'Pricelist & Diskon', icon: 'Tags' },
@@ -235,6 +236,7 @@ export const PAGE_META = {
   pos: { title: 'POS / Kasir', subtitle: 'Penjualan layanan dan produk properti' },
   bookings: { title: 'Booking Online', subtitle: 'Permintaan booking dari landing page' },
   daily: { title: 'Booking Harian', subtitle: 'Kamar harian, ketersediaan, dan parkir mobil' },
+  'daily-settings': { title: 'Atur Kamar VIP', subtitle: 'Harga & ketersediaan kamar 101 per tanggal' },
   rooms: { title: 'Status Kamar', subtitle: 'Inventaris dan okupansi kamar' },
   gallery: { title: 'Galeri Landing', subtitle: 'Foto yang tampil di halaman publik' },
   pricing: { title: 'Pricelist & Diskon', subtitle: 'Strategi tarif dan promo' },

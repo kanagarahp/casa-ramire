@@ -11,6 +11,11 @@ import {
 } from '../core/format.js';
 import { getActiveUser } from '../services/auth.js';
 import { submitBookingRequest } from '../services/bookings.js';
+import {
+  dailyPriceForDate,
+  dailyTotalForRange,
+  rangeAvailability,
+} from '../services/daily-calendar.js';
 import { buildCatalogSnapshot, fetchLiveAvailability, fetchPublishedCatalog } from '../services/catalog.js';
 import { isValidEmail } from '../services/email.js';
 import { brandMark } from '../ui/brand.js';
@@ -78,6 +83,12 @@ function normalizeCatalog(input) {
       tipe: room.tipe || (floor === '1' ? 'Deluxe VIP' : 'Deluxe'),
       dailyEnabled: room.dailyEnabled !== false,
       monthlyEnabled: floor === '1' ? false : room.monthlyEnabled !== false,
+      dailyCalendar:
+        room.dailyCalendar &&
+        typeof room.dailyCalendar === 'object' &&
+        !Array.isArray(room.dailyCalendar)
+          ? room.dailyCalendar
+          : {},
     };
   });
   const availability = input?.availability || {
@@ -149,6 +160,25 @@ function monthlyRooms(catalog) {
   return (catalog.rooms || []).filter(
     (room) => room.status === 'kosong' && room.monthlyEnabled !== false,
   );
+}
+
+function roomAvailableForRange(room, startDate, endDate) {
+  if (!room || room.status !== 'kosong') return false;
+  if (String(room.lantai) !== '1') return true;
+  return rangeAvailability(room, startDate, endDate).available;
+}
+
+function roomDailyPrice(room, date, fallbackRate) {
+  return dailyPriceForDate(room, date, fallbackRate);
+}
+
+function nextAvailableStartDate(room, from = todayISO()) {
+  if (!room || String(room.lantai) !== '1') return from;
+  for (let index = 0; index < 366; index += 1) {
+    const date = addDays(from, index);
+    if (rangeAvailability(room, date, addDays(date, 1)).available) return date;
+  }
+  return from;
 }
 
 function rateFor(catalog, floor, periode) {
@@ -247,7 +277,7 @@ function promoRemaining(promo) {
  * Quote using the *published* price list so visitors see the same price that
  * the admin panel will use later. Mirrors the rules in services/pricing.js.
  */
-function quoteFor(catalog, { floor, periode, startDate, endDate, promo, car }) {
+function quoteFor(catalog, { floor, room = null, periode, startDate, endDate, promo, car }) {
   const period = PERIODS.find((item) => item.key === String(periode)) || PERIODS[2];
   const start = startDate || todayISO();
   let resolvedEnd = '';
@@ -270,7 +300,23 @@ function quoteFor(catalog, { floor, periode, startDate, endDate, promo, car }) {
     units = period.kind === 'days' ? days : Math.max(1, Math.ceil(days / 7));
   }
 
-  const base = period.kind === 'months' ? rate : rate * units;
+  if (room && String(room.lantai) === '1') {
+    const availability = rangeAvailability(room, start, resolvedEnd);
+    if (!availability.available) {
+      return {
+        error: `Kamar ${room.nomor} tidak tersedia pada tanggal ${availability.blockedDates.join(', ')}. Pilih tanggal lain.`,
+      };
+    }
+  }
+
+  const base =
+    period.kind === 'months'
+      ? rate
+      : period.kind === 'days'
+        ? room
+          ? dailyTotalForRange(room, start, resolvedEnd, rate)
+          : rate * units
+        : rate * units;
   const chargedMonths = period.kind === 'months' ? period.months : 1;
 
   const grossDiscount = !promo
@@ -436,27 +482,35 @@ function availabilitySection(catalog) {
 }
 
 function dailySection(catalog) {
+  const today = todayISO();
+  const tomorrow = addDays(today, 1);
   const rooms = dailyRooms(catalog).sort((a, b) =>
     String(a.nomor).localeCompare(String(b.nomor), undefined, { numeric: true }),
   );
   const vip = rooms.filter((room) => String(room.lantai) === '1');
   const regular = rooms.filter((room) => String(room.lantai) !== '1');
+  const vipRoom = vip[0] || null;
+  const vipBlockedToday = vipRoom ? !roomAvailableForRange(vipRoom, today, tomorrow) : false;
   const dailyRate = (floor) => rateFor(catalog, floor, 'harian');
   const parking = catalog.parking || {};
 
-  const roomButton = (room) => `
+  const roomButton = (room) => {
+    const price = roomDailyPrice(room, today, dailyRate(room.lantai));
+    const blocked = String(room.lantai) === '1' && !roomAvailableForRange(room, today, tomorrow);
+    return `
     <button type="button" class="text-left rounded-2xl border border-line bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition" data-book-room="${esc(room.id)}" data-book-floor="${esc(room.lantai)}" data-book-type="harian">
       <div class="flex items-start justify-between gap-2">
         <div>
           <p class="text-[9px] font-extrabold uppercase tracking-wider text-gold-700">${esc(roomTypeFor(room))}</p>
           <p class="text-base font-black text-stone-800 mt-0.5">Kamar ${esc(room.nomor)}</p>
         </div>
-        <span class="badge-green">Harian</span>
+        <span class="${blocked ? 'badge-amber' : 'badge-green'}">${blocked ? 'Cek tanggal' : 'Harian'}</span>
       </div>
-      <p class="text-[11px] text-stone-600 mt-1">Lantai ${esc(room.lantai)} · ${rupiah(dailyRate(room.lantai))}/hari</p>
-      <p class="text-[10px] font-bold text-brand mt-2">Pilih kamar ini →</p>
+      <p class="text-[11px] text-stone-600 mt-1">Lantai ${esc(room.lantai)} · ${String(room.lantai) === '1' ? 'mulai ' : ''}${rupiah(price)}/hari</p>
+      <p class="text-[10px] font-bold text-brand mt-2">${blocked ? 'Pilih tanggal lain →' : 'Pilih kamar ini →'}</p>
     </button>
   `;
+  };
 
   return `
     <section id="harian" class="scroll-mt-20 py-12 sm:py-16 bg-white border-y border-line">
@@ -493,11 +547,12 @@ function dailySection(catalog) {
               </div>
               <span class="w-11 h-11 rounded-xl bg-gold-50 text-gold-700 flex items-center justify-center shrink-0">${icon('Sparkles', 'w-5 h-5')}</span>
             </div>
-            <p class="text-3xl font-black text-stone-800 mt-4">${rupiah(dailyRate('1'))}<span class="text-xs font-bold text-stone-500"> /hari</span></p>
+            <p class="text-3xl font-black text-stone-800 mt-4"><span class="text-xs font-bold text-stone-500">mulai </span>${rupiah(dailyRate('1'))}<span class="text-xs font-bold text-stone-500"> /hari</span></p>
+            <p class="text-[10px] text-stone-500 mt-1">Harga bisa berbeda pada weekend atau peak season. Ketersediaan mengikuti kalender owner.</p>
             <div class="mt-4">
               ${
                 vip.length
-                  ? vip.map(roomButton).join('')
+                  ? `${vipBlockedToday ? `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 mb-2">Kamar VIP tidak dijual untuk malam ini. Silakan pilih tanggal lain.</div>` : ''}${vip.map(roomButton).join('')}`
                   : `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900">Kamar VIP sedang terisi. Silakan cek lagi nanti atau hubungi admin.</div>`
               }
             </div>
@@ -977,6 +1032,10 @@ function openBookingModal(
     const keys = periodKeysFor(type);
     return keys.includes(String(periode)) ? String(periode) : keys[0];
   };
+  const initialStartDate =
+    initialRoom && String(initialRoom.lantai) === '1'
+      ? nextAvailableStartDate(initialRoom)
+      : todayISO();
 
   const instance = openModal({
     title: 'Booking Kamar',
@@ -1040,7 +1099,7 @@ function openBookingModal(
           </div>
           <div>
             <label class="label" for="hm-start">Tanggal mulai</label>
-            <input id="hm-start" type="date" class="input" value="${todayISO()}" />
+            <input id="hm-start" type="date" class="input" value="${initialStartDate}" />
           </div>
         </div>
 
@@ -1163,13 +1222,27 @@ function openBookingModal(
 
       const paintRoomOptions = () => {
         const type = currentType();
+        const startDate = startInput.value || todayISO();
+        const endDate =
+          endInput.value && endInput.value > startDate
+            ? endInput.value
+            : addDays(startDate, type === 'harian' ? 1 : 30);
         const floorRooms = roomsFor(type).filter(
-          (room) => String(room.lantai) === String(floorSelect.value),
+          (room) =>
+            String(room.lantai) === String(floorSelect.value) &&
+            (type !== 'harian' || roomAvailableForRange(room, startDate, endDate)),
         );
         roomSelect.innerHTML = [
           `<option value="">Admin pilihkan</option>`,
           ...floorRooms.map((room) => {
-            const price = rateFor(catalog, room.lantai, type === 'harian' ? 'harian' : '1');
+            const price =
+              type === 'harian'
+                ? roomDailyPrice(
+                    room,
+                    startDate,
+                    rateFor(catalog, room.lantai, 'harian'),
+                  )
+                : rateFor(catalog, room.lantai, '1');
             return `<option value="${esc(room.id)}" ${String(room.id) === String(selectedRoomId) ? 'selected' : ''}>Kamar ${esc(room.nomor)} · ${esc(roomTypeFor(room))} · ${rupiah(price)}</option>`;
           }),
         ].join('');
@@ -1204,8 +1277,12 @@ function openBookingModal(
         if (promo && promoRemaining(promo) <= 0) {
           return { error: 'Kode promo ini sudah habis dipakai.' };
         }
+        const selectedRoom = (catalog.rooms || []).find(
+          (room) => String(room.id) === String(roomSelect.value || selectedRoomId),
+        );
         return quoteFor(catalog, {
           floor: floorSelect.value,
+          room: selectedRoom,
           periode: periodeSelect.value,
           startDate: startInput.value,
           endDate: endInput.value,
@@ -1314,9 +1391,13 @@ function openBookingModal(
             endInput.value = addDays(startInput.value, minimum);
           }
         }
+        paintRoomOptions();
         paintSummary();
       });
-      endInput.addEventListener('change', paintSummary);
+      endInput.addEventListener('change', () => {
+        paintRoomOptions();
+        paintSummary();
+      });
 
       // Keep an explicitly selected room card only when it fits the chosen type.
       if (
@@ -1607,6 +1688,12 @@ export function render(root) {
           dailyEnabled: room.dailyEnabled !== false,
           monthlyEnabled:
             String(room.lantai) === '1' ? false : room.monthlyEnabled !== false,
+          dailyCalendar:
+            room.dailyCalendar &&
+            typeof room.dailyCalendar === 'object' &&
+            !Array.isArray(room.dailyCalendar)
+              ? room.dailyCalendar
+              : {},
         })),
       };
       paint(root, catalog, { preview: false, source: published ? 'published' : 'local' });

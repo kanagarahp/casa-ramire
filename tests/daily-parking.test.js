@@ -4,7 +4,7 @@ import test from 'node:test';
 import { normalizePublicState } from '../api/_lib/state-normalize.js';
 import { PAYMENT_METHODS } from '../src/core/constants.js';
 import { buildSeedState } from '../src/core/seed.js';
-import { getState, replaceState } from '../src/core/store.js';
+import { getState, replaceState, update } from '../src/core/store.js';
 import { buildBillingEmail } from '../src/services/email.js';
 import {
   getDailyAvailableRooms,
@@ -66,6 +66,43 @@ test('vacant monthly rooms are daily-available, daily summary follows room state
   assert.equal(isDailyAvailable(getRoom(room.id)), false);
   assert.equal(getDailySummary().booked, 1);
   assert.equal(getDailySummary().available, 42);
+});
+
+test('VIP calendar controls blocked dates and per-date prices', () => {
+  fresh();
+  const vip = getRooms().find((room) => room.nomor === '101');
+  update((draft) => {
+    const room = draft.rooms.find((item) => item.nomor === '101');
+    room.dailyCalendar = {
+      '2026-11-20': { available: false, price: 0, note: 'Dipakai sendiri' },
+      '2026-11-21': { available: true, price: 350000, note: 'Weekend' },
+    };
+  });
+
+  const updated = getRoom(vip.id);
+  assert.equal(isDailyAvailable(updated, '2026-11-20'), false);
+  assert.equal(isDailyAvailable(updated, '2026-11-21'), true);
+
+  const quote = computeQuote({
+    lantai: '1',
+    room: updated,
+    periode: 'harian',
+    startDate: '2026-11-21',
+    endDate: '2026-11-23',
+    depositEnabled: false,
+    payOption: 'partial',
+  });
+  assert.equal(quote.base, 350000 + 250000);
+
+  assert.throws(
+    () =>
+      saveBooking(vip.id, {
+        ...bookingPayload(),
+        startDate: '2026-11-20',
+        endDate: '2026-11-21',
+      }),
+    /tidak tersedia/,
+  );
 });
 
 test('room 101 rejects monthly bookings but accepts daily bookings', () => {

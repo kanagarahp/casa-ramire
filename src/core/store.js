@@ -61,6 +61,12 @@ function migrate(stored) {
       tipe: isVip ? 'Deluxe VIP' : room.tipe || 'Deluxe',
       dailyEnabled: room.dailyEnabled !== false,
       monthlyEnabled: isVip ? false : room.monthlyEnabled !== false,
+      dailyCalendar:
+        room.dailyCalendar &&
+        typeof room.dailyCalendar === 'object' &&
+        !Array.isArray(room.dailyCalendar)
+          ? room.dailyCalendar
+          : {},
     };
   });
 
@@ -80,6 +86,7 @@ function migrate(stored) {
       photoUrl: '',
       dailyEnabled: true,
       monthlyEnabled: false,
+      dailyCalendar: {},
     });
   }
 

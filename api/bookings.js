@@ -93,6 +93,35 @@ function validateBooking(body) {
   };
 }
 
+function addDaysISO(value, days) {
+  const [year, month, day] = String(value || '').slice(0, 10).split('-').map(Number);
+  if (!year || !month || !day) return '';
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + Number(days || 0));
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+}
+
+function stayDates(startDate, endDate) {
+  const start = String(startDate || '').slice(0, 10);
+  const end = String(endDate || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return [];
+  const dates = [];
+  let cursor = start;
+  for (let index = 0; index < 370; index += 1) {
+    if (!cursor || cursor >= end) break;
+    dates.push(cursor);
+    cursor = addDaysISO(cursor, 1);
+  }
+  return dates;
+}
+
+function blockedDatesFor(room, startDate, endDate) {
+  const calendar = room?.dailyCalendar || {};
+  return stayDates(startDate, endDate).filter((date) => calendar[date]?.available === false);
+}
+
 function hasCarAddon(addons = []) {
   return (Array.isArray(addons) ? addons : []).some(
     (addon) =>
@@ -136,6 +165,12 @@ function roomUnavailableMessage(state, data) {
   }
   if (!short && room.monthlyEnabled === false) {
     return `Kamar ${room.nomor} hanya untuk sewa harian, bukan bulanan.`;
+  }
+  if (short) {
+    const blocked = blockedDatesFor(room, data.startDate, data.endDate);
+    if (blocked.length) {
+      return `Kamar ${room.nomor} tidak tersedia pada tanggal ${blocked.join(', ')}. Silakan pilih tanggal atau kamar lain.`;
+    }
   }
   return '';
 }

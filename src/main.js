@@ -14,6 +14,7 @@ import * as dashboardView from './views/dashboard.js';
 import * as posView from './views/pos.js';
 import * as bookingsView from './views/bookings.js';
 import * as dailyView from './views/daily.js';
+import * as dailySettingsView from './views/daily-settings.js';
 import * as roomsView from './views/rooms.js';
 import * as galleryView from './views/gallery.js';
 import * as pricingView from './views/pricing.js';
@@ -34,6 +35,7 @@ const VIEWS = {
   pos: posView,
   bookings: bookingsView,
   daily: dailyView,
+  'daily-settings': dailySettingsView,
   rooms: roomsView,
   gallery: galleryView,
   pricing: pricingView,

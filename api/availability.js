@@ -9,6 +9,12 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function todayISO(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+}
+
 function hasCarAddon(addons = []) {
   return (Array.isArray(addons) ? addons : []).some(
     (addon) =>
@@ -88,6 +94,7 @@ export default async function handler(req, res) {
         status: room.status,
         dailyEnabled: room.dailyEnabled !== false,
         monthlyEnabled: room.monthlyEnabled !== false,
+        dailyCalendar: room.lantai === '1' ? room.dailyCalendar || {} : {},
         priceDaily: toNumber(state?.pricing?.[room.lantai === '1' ? 'lantai1' : room.lantai === '3' ? 'lantai3' : 'lantai2']?.harian),
         priceMonthly: toNumber(state?.pricing?.[room.lantai === '1' ? 'lantai1' : room.lantai === '3' ? 'lantai3' : 'lantai2']?.['1']),
       }))
@@ -103,7 +110,11 @@ export default async function handler(req, res) {
         occupied: rooms.filter((room) => room.status === 'terisi').length,
         booked: rooms.filter((room) => room.status === 'booking').length,
         dailyAvailable: rooms.filter(
-          (room) => room.status === 'kosong' && room.dailyEnabled,
+          (room) =>
+            room.status === 'kosong' &&
+            room.dailyEnabled &&
+            (String(room.lantai) !== '1' ||
+              room.dailyCalendar?.[todayISO()]?.available !== false),
         ).length,
         monthlyAvailable: rooms.filter(
           (room) => room.status === 'kosong' && room.monthlyEnabled,

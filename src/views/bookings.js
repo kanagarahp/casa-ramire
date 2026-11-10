@@ -1,6 +1,7 @@
 import { BOOKING_REQUEST_STATUS } from '../core/constants.js';
-import { formatDate, formatDateTime, rupiah, todayISO } from '../core/format.js';
+import { addDays, formatDate, formatDateTime, rupiah, todayISO } from '../core/format.js';
 import { fetchBookingRequests, updateBookingRequest } from '../services/bookings.js';
+import { rangeAvailability } from '../services/daily-calendar.js';
 import { notifyBookingSaved } from '../services/notifications.js';
 import {
   carAddon,
@@ -279,10 +280,21 @@ async function load() {
 
 function vacantRooms(request) {
   const short = request.periode === 'harian' || request.periode === 'mingguan';
+  const startDate = request.startDate || todayISO();
+  const endDate =
+    request.endDate && request.endDate > startDate
+      ? request.endDate
+      : addDays(startDate, short ? 1 : 30);
   return getRooms()
     .filter((room) => {
       if (room.status !== 'kosong') return false;
-      if (short) return room.dailyEnabled !== false;
+      if (short) {
+        if (room.dailyEnabled === false) return false;
+        if (String(room.lantai) === '1') {
+          return rangeAvailability(room, startDate, endDate).available;
+        }
+        return true;
+      }
       return room.monthlyEnabled !== false;
     })
     .sort((a, b) => a.nomor.localeCompare(b.nomor, undefined, { numeric: true }));
@@ -360,6 +372,7 @@ function openConvertModal(request, onDone) {
         try {
           const quote = computeQuote({
             lantai: room.lantai,
+            room,
             periode: request.periode,
             startDate: startInput.value || request.startDate,
             endDate: request.endDate || undefined,

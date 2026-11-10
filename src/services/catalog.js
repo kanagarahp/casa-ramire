@@ -1,4 +1,6 @@
+import { todayISO } from '../core/format.js';
 import { getState, update } from '../core/store.js';
+import { isDateBlocked } from './daily-calendar.js';
 import { getCarParkingStatus } from './parking.js';
 import { getFacilities, getParkingCapacity } from './settings.js';
 import { getRate, syncPromoUsage } from './pricing.js';
@@ -26,8 +28,12 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
   const available = rooms.filter((room) => room.status === 'kosong').length;
   const occupied = rooms.filter((room) => room.status === 'terisi').length;
   const booked = rooms.filter((room) => room.status === 'booking').length;
+  const today = todayISO();
   const dailyAvailable = rooms.filter(
-    (room) => room.status === 'kosong' && room.dailyEnabled !== false,
+    (room) =>
+      room.status === 'kosong' &&
+      room.dailyEnabled !== false &&
+      (String(room.lantai) !== '1' || !isDateBlocked(room, today)),
   ).length;
   const monthlyAvailable = rooms.filter(
     (room) => room.status === 'kosong' && room.monthlyEnabled !== false,
@@ -91,6 +97,7 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
       statusLabel: STATUS_LABEL[room.status] || 'Tersedia',
       dailyEnabled: room.dailyEnabled !== false,
       monthlyEnabled: room.monthlyEnabled !== false,
+      dailyCalendar: String(room.lantai) === '1' ? room.dailyCalendar || {} : {},
       priceDaily: getRate(room.lantai, 'harian'),
       priceMonthly: getRate(room.lantai, '1'),
     })),
