@@ -7,6 +7,7 @@ import {
   getTenants,
   updateRoomPhoto,
 } from '../services/property.js';
+import { roomType } from '../services/daily.js';
 import { isOwner } from '../services/auth.js';
 import { storage } from '../core/storage.js';
 import { rupiah } from '../core/format.js';
@@ -25,6 +26,7 @@ import {
   openCheckinFlow,
   openCheckoutModal,
   openExtendModal,
+  openMoveBookingModal,
 } from './booking-modal.js';
 import { openTenantDetail } from './tenant-detail.js';
 
@@ -54,7 +56,10 @@ function syncFilterButtons(scope) {
 
 function roomRate(room) {
   const rates = getRates(room.lantai);
-  return rupiah(rates['1'] || 0);
+  if (String(room.lantai) === '1' || room.monthlyEnabled === false) {
+    return `${rupiah(rates.harian || 0)}/hari`;
+  }
+  return `${rupiah(rates['1'] || 0)}/bulan`;
 }
 
 function photoAction(room) {
@@ -79,6 +84,7 @@ function actionsFor(room) {
       ${photoAction(room)}
       <button type="button" class="btn-primary btn-xs" data-action="checkin" data-id="${room.id}">${icon('LogIn', 'w-3 h-3')} Check-in</button>
       <button type="button" class="btn-outline btn-xs" data-action="edit-booking" data-id="${room.id}">${icon('Pencil', 'w-3 h-3')} Edit</button>
+      <button type="button" class="btn-outline btn-xs" data-action="move-booking" data-id="${room.id}">${icon('Repeat', 'w-3 h-3')} Pindah</button>
       <button type="button" class="btn-ghost btn-xs text-rose-600" data-action="cancel-booking" data-id="${room.id}" title="Batalkan booking">${icon('X', 'w-3.5 h-3.5')}</button>
     `;
   }
@@ -144,10 +150,11 @@ function gridHtml(rooms, tenantsById) {
             <div class="flex items-end justify-between gap-2">
               <div>
                 <h2 class="text-2xl font-black text-stone-800 leading-none">Kamar ${esc(room.nomor)}</h2>
-                <p class="text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-1">Deluxe</p>
+                <p class="text-[10px] font-bold text-amber-700 uppercase tracking-wider mt-1">${esc(roomType(room))}</p>
+                <p class="text-[9px] text-stone-500 mt-0.5">${room.monthlyEnabled === false ? 'Khusus harian' : room.dailyEnabled !== false ? 'Bisa harian & bulanan' : 'Bulanan'}</p>
               </div>
               <div class="text-right">
-                <p class="text-[9px] text-stone-600 font-bold uppercase tracking-wider">Tarif / bulan</p>
+                <p class="text-[9px] text-stone-600 font-bold uppercase tracking-wider">Tarif</p>
                 <p class="text-sm font-black text-stone-700">${roomRate(room)}</p>
               </div>
             </div>
@@ -174,7 +181,7 @@ function listHtml(rooms, tenantsById) {
     <div class="card overflow-hidden">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Kamar</th><th>Lantai</th><th>Status</th><th>Penghuni</th><th>Tarif / bulan</th><th class="text-right">Aksi</th></tr></thead>
+          <thead><tr><th>Kamar</th><th>Tipe</th><th>Status</th><th>Penghuni</th><th>Tarif</th><th class="text-right">Aksi</th></tr></thead>
           <tbody>
             ${rooms
               .map((room) => {
@@ -191,7 +198,10 @@ function listHtml(rooms, tenantsById) {
                         <span>Kamar ${esc(room.nomor)}</span>
                       </div>
                     </td>
-                    <td>Lantai ${esc(room.lantai)}</td>
+                    <td>
+                      <p class="text-xs font-bold text-stone-700">${esc(roomType(room))}</p>
+                      <p class="text-[10px] text-stone-500">Lantai ${esc(room.lantai)}</p>
+                    </td>
                     <td>${statusBadge(room.status)}</td>
                     <td>${occupantHtml(room, tenant)}</td>
                     <td class="font-bold whitespace-nowrap">${roomRate(room)}</td>
@@ -210,6 +220,7 @@ export function render(root) {
 
   const counts = {
     all: allRooms.length,
+    '1': allRooms.filter((room) => room.lantai === '1').length,
     '2': allRooms.filter((room) => room.lantai === '2').length,
     '3': allRooms.filter((room) => room.lantai === '3').length,
     kosong: allRooms.filter((room) => room.status === 'kosong').length,
@@ -222,7 +233,7 @@ export function render(root) {
       ${pageHeader({
         eyebrow: 'Inventaris Kamar',
         title: 'Status & Manajemen Kamar 🏢',
-        subtitle: `Kelola ${allRooms.length} kamar di lantai 2 dan 3. Filter, cari, dan proses check-in dari satu tempat.`,
+        subtitle: `Kelola ${allRooms.length} kamar di lantai 1, 2, dan 3. Kamar 101 adalah Deluxe VIP untuk sewa harian.`,
         actions: `
           <button type="button" class="btn-primary btn-sm" data-action="add-room">${icon('Plus', 'w-4 h-4')} Tambah Kamar</button>
         `,
@@ -231,6 +242,7 @@ export function render(root) {
       <div class="card p-3 mb-5 flex flex-col gap-3">
         <div class="flex flex-wrap items-center gap-2">
           <button type="button" class="chip-active" data-floor="all">Semua (${counts.all})</button>
+          <button type="button" class="chip-idle" data-floor="1">Lantai 1 (${counts['1']})</button>
           <button type="button" class="chip-idle" data-floor="2">Lantai 2 (${counts['2']})</button>
           <button type="button" class="chip-idle" data-floor="3">Lantai 3 (${counts['3']})</button>
           <div class="hidden sm:block w-px h-6 bg-line mx-1"></div>
@@ -340,6 +352,7 @@ export function render(root) {
       else openBookingModal(room.id, 'checkin');
     }
     if (action === 'edit-booking') openBookingModal(room.id, 'edit_booking');
+    if (action === 'move-booking') openMoveBookingModal(room.id);
     if (action === 'detail' && room.tenantId) openTenantDetail(room.tenantId);
     if (action === 'extend' && room.tenantId) openExtendModal(room.tenantId);
     if (action === 'checkout' && room.tenantId) openCheckoutModal(room.tenantId);
@@ -392,6 +405,15 @@ function openAddRoomModal() {
           <select id="nr-floor" class="select">
             <option value="2">Lantai 2</option>
             <option value="3">Lantai 3</option>
+            <option value="1">Lantai 1 (Deluxe VIP · harian)</option>
+          </select>
+          <p class="hint mt-1">Kamar lantai 1 otomatis Deluxe VIP dan hanya untuk sewa harian.</p>
+        </div>
+        <div>
+          <label class="label" for="nr-type">Tipe kamar</label>
+          <select id="nr-type" class="select">
+            <option value="Deluxe">Deluxe</option>
+            <option value="Deluxe VIP">Deluxe VIP</option>
           </select>
         </div>
       </form>
@@ -407,6 +429,7 @@ function openAddRoomModal() {
           addRoom({
             nomor: el.querySelector('#nr-number').value,
             lantai: el.querySelector('#nr-floor').value,
+            tipe: el.querySelector('#nr-type').value,
           });
           toast('Kamar baru berhasil ditambahkan.');
           close();

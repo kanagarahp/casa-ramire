@@ -1,13 +1,15 @@
 import { BOOKING_REQUEST_STATUS } from '../core/constants.js';
 import { formatDate, formatDateTime, rupiah, todayISO } from '../core/format.js';
 import { fetchBookingRequests, updateBookingRequest } from '../services/bookings.js';
-import { computeQuote, getPromoByCode, syncPromoUsage } from '../services/pricing.js';
+import { notifyBookingSaved } from '../services/notifications.js';
+import { carAddon, computeQuote, getPromoByCode, syncPromoUsage } from '../services/pricing.js';
 import { getRooms, saveBooking } from '../services/property.js';
 import { emptyState, pageHeader, statCard } from '../ui/components.js';
 import { delegate, esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { openSettingsModal } from './settings.js';
 
 let filter = 'pending';
 let requests = [];
@@ -15,6 +17,23 @@ let loading = true;
 let notice = '';
 let lastLoaded = 0;
 let inFlight = false;
+let activeRoot = null;
+let pollTimer = null;
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = window.setInterval(async () => {
+    if (!activeRoot?.querySelector('[data-view="bookings"]')) return;
+    if (inFlight) return;
+    inFlight = true;
+    try {
+      await load();
+      if (activeRoot?.querySelector('[data-view="bookings"]')) render(activeRoot);
+    } finally {
+      inFlight = false;
+    }
+  }, 20_000);
+}
 
 function statusBadge(status) {
   const meta = BOOKING_REQUEST_STATUS[status] || BOOKING_REQUEST_STATUS.pending;
@@ -70,6 +89,8 @@ function rowHtml(request) {
 }
 
 export function render(root) {
+  activeRoot = root;
+  startPolling();
   const filtered = filter === 'all' ? requests : requests.filter((item) => item.status === filter);
   const pending = requests.filter((item) => item.status === 'pending').length;
   const confirmed = requests.filter((item) => item.status === 'confirmed').length;
@@ -95,7 +116,11 @@ export function render(root) {
         notice
           ? `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 mb-4 flex items-start gap-2">
               ${icon('AlertTriangle', 'w-4 h-4 shrink-0 mt-0.5')}
-              <span>${esc(notice)}</span>
+              <div class="flex-1">
+                <p>${esc(notice)}</p>
+                <p class="text-[10px] mt-1">Booking dari landing page tetap tersimpan di server. Agar daftar ini memuat data server, pastikan <b>Kunci admin</b> di Pengaturan sama dengan <code class="font-mono">CATALOG_ADMIN_KEY</code> di Vercel.</p>
+              </div>
+              <button type="button" class="btn-outline btn-xs shrink-0" data-action="open-settings">${icon('Settings', 'w-3 h-3')} Pengaturan</button>
             </div>`
           : ''
       }
@@ -169,6 +194,11 @@ export function render(root) {
       return;
     }
 
+    if (action === 'open-settings') {
+      openSettingsModal();
+      return;
+    }
+
     const request = requests.find((item) => item.code === target.dataset.code);
     if (!request) return;
 
@@ -219,7 +249,17 @@ export function render(root) {
 
 async function load() {
   const result = await fetchBookingRequests();
-  requests = result.requests;
+  const byCode = new Map();
+  for (const request of result.requests) {
+    const key = String(request.code || request.id);
+    if (!key) continue;
+    const existing = byCode.get(key);
+    // Prefer the server copy when the same booking exists locally.
+    if (!existing || request.source === 'server') byCode.set(key, request);
+  }
+  requests = [...byCode.values()].sort((a, b) =>
+    String(b.createdAt).localeCompare(String(a.createdAt)),
+  );
   notice = result.offline
     ? `Mode lokal / API belum tersedia: ${result.reason || 'perubahan hanya tersimpan di perangkat ini.'}`
     : '';
@@ -228,16 +268,26 @@ async function load() {
   loading = false;
 }
 
-function vacantRooms(preferredRoomId) {
+function vacantRooms(request) {
+  const short = request.periode === 'harian' || request.periode === 'mingguan';
   return getRooms()
-    .filter((room) => room.status === 'kosong')
+    .filter((room) => {
+      if (room.status !== 'kosong') return false;
+      if (short) return room.dailyEnabled !== false;
+      return room.monthlyEnabled !== false;
+    })
     .sort((a, b) => a.nomor.localeCompare(b.nomor, undefined, { numeric: true }));
 }
 
 function openConvertModal(request, onDone) {
-  const rooms = vacantRooms(request.roomId);
+  const rooms = vacantRooms(request);
   if (!rooms.length) {
-    toast('Tidak ada kamar kosong. Kosongkan kamar terlebih dahulu.', 'warning');
+    toast(
+      request.periode === 'harian'
+        ? 'Tidak ada kamar kosong yang bisa dipakai harian saat ini.'
+        : 'Tidak ada kamar kosong untuk booking bulanan. Kosongkan kamar terlebih dahulu.',
+      'warning',
+    );
     return;
   }
   const preferred = rooms.find((room) => String(room.id) === String(request.roomId));
@@ -302,7 +352,7 @@ function openConvertModal(request, onDone) {
             startDate: startInput.value || request.startDate,
             endDate: request.endDate || undefined,
             promo: getPromoByCode(request.promoCode),
-            addons: [],
+            addons: request.car ? [carAddon()] : [],
             car: Boolean(request.car),
             depositEnabled: false,
             depositValue: 0,
@@ -332,7 +382,7 @@ function openConvertModal(request, onDone) {
         const quote = paintSummary();
         if (!quote) return;
         try {
-          saveBooking(roomId, {
+          const savedRoom = saveBooking(roomId, {
             name: request.name,
             phone: request.phone,
             email: request.email,
@@ -352,6 +402,12 @@ function openConvertModal(request, onDone) {
           await updateBookingRequest({ ...request, status: 'confirmed' });
           request.status = 'confirmed';
           toast('Booking online berhasil dikonversi ke booking kamar.');
+          void notifyBookingSaved({
+            room: savedRoom,
+            booking: savedRoom.booking,
+            email: request.email,
+            isNew: true,
+          });
           close();
           onDone?.();
         } catch (error) {

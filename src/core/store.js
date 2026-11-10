@@ -1,4 +1,11 @@
-import { CAR_FEE, SCHEMA_VERSION, STORAGE_KEY } from './constants.js';
+import {
+  CAR_DAILY_FEE,
+  CAR_FEE,
+  MAX_PARKING_CARS,
+  NOTIFICATION_EMAIL,
+  SCHEMA_VERSION,
+  STORAGE_KEY,
+} from './constants.js';
 import { buildSeedState } from './seed.js';
 import { storage } from './storage.js';
 
@@ -14,7 +21,11 @@ function migrate(stored) {
     ...stored,
     version: SCHEMA_VERSION,
     meta: { ...base.meta, ...(stored.meta || {}) },
-    pricing: { ...base.pricing, ...(stored.pricing || {}) },
+    pricing: {
+      lantai1: { ...base.pricing.lantai1, ...(stored.pricing?.lantai1 || {}) },
+      lantai2: { ...base.pricing.lantai2, ...(stored.pricing?.lantai2 || {}) },
+      lantai3: { ...base.pricing.lantai3, ...(stored.pricing?.lantai3 || {}) },
+    },
     templates: { ...base.templates, ...(stored.templates || {}) },
     settings: { ...base.settings, ...(stored.settings || {}) },
   };
@@ -37,11 +48,41 @@ function migrate(stored) {
   }
 
   // v4: rooms can carry a catalog photo (local data URL and/or published URL).
-  merged.rooms = merged.rooms.map((room) => ({
-    photo: '',
-    photoUrl: '',
-    ...room,
-  }));
+  // v9: room type + daily/monthly availability. Floor 1 holds a single
+  // Deluxe VIP room that is rented daily; empty monthly rooms on floors 2–3
+  // can also be used for daily guests.
+  merged.rooms = merged.rooms.map((room) => {
+    const floor = String(room.lantai || '2');
+    const isVip = floor === '1';
+    return {
+      photo: '',
+      photoUrl: '',
+      ...room,
+      lantai: floor,
+      tipe: isVip ? 'Deluxe VIP' : room.tipe || 'Deluxe',
+      dailyEnabled: room.dailyEnabled !== false,
+      monthlyEnabled: isVip ? false : room.monthlyEnabled !== false,
+    };
+  });
+
+  // Existing saves (created before v9) do not have the lantai 1 VIP room.
+  if (!merged.rooms.some((room) => String(room.lantai) === '1')) {
+    const nextRoomId =
+      merged.rooms.reduce((max, room) => Math.max(max, Number(room.id) || 0), 0) + 1;
+    merged.rooms.push({
+      id: nextRoomId,
+      nomor: '101',
+      lantai: '1',
+      tipe: 'Deluxe VIP',
+      status: 'kosong',
+      tenantId: null,
+      booking: null,
+      photo: '',
+      photoUrl: '',
+      dailyEnabled: true,
+      monthlyEnabled: false,
+    });
+  }
 
   // v5: landing-page gallery replaces the per-room catalog.
   merged.gallery = merged.gallery.map((item, index) => ({
@@ -142,6 +183,20 @@ function migrate(stored) {
       merged.settings.dokuEnabled = base.settings.dokuEnabled;
     }
   }
+
+  // v9: operational notification inbox, parking capacity, and daily parking
+  // fee. Empty/invalid old values are replaced with safe defaults.
+  if (!String(merged.settings.notificationEmail || '').trim()) {
+    merged.settings.notificationEmail = NOTIFICATION_EMAIL;
+  }
+  const parkingCapacity = Math.floor(Number(merged.settings.parkingCapacity));
+  merged.settings.parkingCapacity =
+    Number.isFinite(parkingCapacity) && parkingCapacity > 0
+      ? parkingCapacity
+      : MAX_PARKING_CARS;
+  const carDailyFee = Math.floor(Number(merged.settings.carDailyFee));
+  merged.settings.carDailyFee =
+    Number.isFinite(carDailyFee) && carDailyFee >= 0 ? carDailyFee : CAR_DAILY_FEE;
 
   // v5: tenants and active bookings store an email address for billing.
   // v8: deposits are tracked separately from rent payments. `deposit` is the

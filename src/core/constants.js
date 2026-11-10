@@ -6,12 +6,29 @@
 export const APP_NAME = 'Casa Ramire';
 export const APP_TAGLINE = 'Property Management OS';
 export const STORAGE_KEY = 'casa-ramire:state';
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 /** Flat monthly surcharge for tenants who bring a car. */
 export const CAR_FEE = 130000;
+/** Daily parking surcharge, used for harian/mingguan bookings. */
+export const CAR_DAILY_FEE = 10000;
 export const CAR_ADDON_NAME = 'Parkir Mobil';
 export const SESSION_KEY = 'casa-ramire:session';
+
+/** Maximum number of cars that fit in the property parking area. */
+export const MAX_PARKING_CARS = 15;
+
+/**
+ * Default inbox for all operational notifications. Owner password recovery
+ * codes, new online bookings, bill reminders, and payment confirmations are
+ * sent here.
+ */
+export const NOTIFICATION_EMAIL = 'casaramirejogja@gmail.com';
+
+export const ROOM_TYPES = {
+  deluxe: { label: 'Deluxe', short: 'Deluxe' },
+  deluxeVip: { label: 'Deluxe VIP', short: 'VIP' },
+};
 
 export const ROLES = {
   owner: { label: 'Owner / Super Admin', short: 'SUPER ADMIN' },
@@ -64,6 +81,18 @@ export const DEFAULT_USERS = [
 ];
 
 export const DEFAULT_PRICING = {
+  /**
+   * Lantai 1 hanya memiliki satu kamar Deluxe VIP yang disewakan harian.
+   * Tarif periode lain sengaja 0 karena tidak ditawarkan.
+   */
+  lantai1: {
+    harian: 250000,
+    mingguan: 0,
+    '1': 0,
+    '3': 0,
+    '6': 0,
+    '12': 0,
+  },
   lantai2: {
     harian: 150000,
     mingguan: 850000,
@@ -175,10 +204,13 @@ export const DEFAULT_SETTINGS = {
   address: 'Kos Casa Ramire, Yogyakarta',
   whatsapp: '081116623661',
   email: 'casaramirejogja@gmail.com',
+  notificationEmail: NOTIFICATION_EMAIL,
   mapsUrl: 'https://www.google.com/maps/search/?api=1&query=casa+ramire+kost+jogja',
   mapsEmbedUrl: 'https://maps.google.com/maps?q=casa%20ramire%20kost%20jogja&z=16&output=embed',
   facilities: 'AC, WiFi, kasur, lemari, meja kerja, kamar mandi dalam',
   depositDefault: DEFAULT_DEPOSIT,
+  parkingCapacity: MAX_PARKING_CARS,
+  carDailyFee: CAR_DAILY_FEE,
   catalogAdminKey: '',
   catalogPublishedAt: '',
   paymentInstructions: '',
@@ -189,6 +221,7 @@ export const NAV_ITEMS = [
   { path: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { path: 'pos', label: 'POS / Kasir', icon: 'ShoppingCart' },
   { path: 'bookings', label: 'Booking Online', icon: 'Inbox' },
+  { path: 'daily', label: 'Booking Harian', icon: 'CalendarDays' },
   { path: 'rooms', label: 'Status Kamar', icon: 'Building2' },
   { path: 'gallery', label: 'Galeri Landing', icon: 'Image' },
   { path: 'pricing', label: 'Pricelist & Diskon', icon: 'Tags' },
@@ -204,6 +237,7 @@ export const PAGE_META = {
   dashboard: { title: 'Dashboard', subtitle: 'Ringkasan operasional properti' },
   pos: { title: 'POS / Kasir', subtitle: 'Penjualan layanan dan produk properti' },
   bookings: { title: 'Booking Online', subtitle: 'Permintaan booking dari landing page' },
+  daily: { title: 'Booking Harian', subtitle: 'Kamar harian, ketersediaan, dan parkir mobil' },
   rooms: { title: 'Status Kamar', subtitle: 'Inventaris dan okupansi kamar' },
   gallery: { title: 'Galeri Landing', subtitle: 'Foto yang tampil di halaman publik' },
   pricing: { title: 'Pricelist & Diskon', subtitle: 'Strategi tarif dan promo' },

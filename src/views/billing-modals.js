@@ -1,8 +1,9 @@
 import { PAYMENT_METHODS } from '../core/constants.js';
 import { addDays, formatDate, rupiah, toNumber, todayISO } from '../core/format.js';
 import { getState } from '../core/store.js';
-import { createBill, createManualInvoice, verifyBill, verifyManualInvoice } from '../services/billing.js';
-import { sendInvoiceByEmail } from '../services/billing-notify.js';
+import { createBill, createManualInvoice, getBill, getManualInvoice, verifyBill, verifyManualInvoice } from '../services/billing.js';
+import { sendBillByEmail, sendInvoiceByEmail } from '../services/billing-notify.js';
+import { notifyPaymentConfirmed } from '../services/notifications.js';
 import { createInvoicePaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { isDokuEnabled } from '../services/settings.js';
 import { getTenants } from '../services/property.js';
@@ -70,16 +71,25 @@ export function openVerifyModal({ kind = 'bill', id }) {
       }
     `,
     onMount(el, close) {
-      el.querySelector('[data-confirm]')?.addEventListener('click', () => {
+      el.querySelector('[data-confirm]')?.addEventListener('click', async (event) => {
         const method = el.querySelector('#vf-method').value;
         const note = el.querySelector('#vf-note').value.trim();
+        const button = event.currentTarget;
+        button.disabled = true;
         try {
           if (kind === 'invoice') verifyManualInvoice(id, { method, note });
           else verifyBill(id, { method, note });
           toast('Pembayaran berhasil diverifikasi.');
+          const updated = kind === 'invoice' ? getManualInvoice(id) : getBill(id);
+          const result = await notifyPaymentConfirmed({ kind, record: updated, method, note });
+          if (!result.sent) {
+            toast('Pembayaran tersimpan, tetapi email konfirmasi belum terkirim. Periksa konfigurasi email.', 'warning');
+          }
           close();
         } catch (error) {
           toast(error.message, 'error');
+        } finally {
+          button.disabled = false;
         }
       });
     },
@@ -132,6 +142,13 @@ export function openCreateBillModal() {
           <label class="label" for="bl-note">Catatan</label>
           <input id="bl-note" type="text" class="input" placeholder="Opsional" />
         </div>
+        <label class="flex items-start gap-2.5 rounded-xl border border-line bg-cream/60 p-3 cursor-pointer">
+          <input id="bl-send-email" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" checked />
+          <span>
+            <span class="block text-xs font-bold text-stone-700">Kirim tagihan ke email penghuni</span>
+            <span class="block text-[10px] text-stone-500 mt-0.5">Salinan juga dikirim ke email admin default.</span>
+          </span>
+        </label>
       </form>
     `,
     footer: `
@@ -139,10 +156,10 @@ export function openCreateBillModal() {
       <button type="submit" form="bill-form" class="btn-primary btn-sm" data-submit>${icon('ReceiptText', 'w-4 h-4')} Simpan tagihan</button>
     `,
     onMount(el, close) {
-      el.querySelector('#bill-form').addEventListener('submit', (event) => {
+      el.querySelector('#bill-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         try {
-          createBill({
+          const bill = createBill({
             tenantId: el.querySelector('#bl-tenant').value,
             type: el.querySelector('#bl-type').value,
             amount: toNumber(el.querySelector('#bl-amount').value),
@@ -150,6 +167,19 @@ export function openCreateBillModal() {
             note: el.querySelector('#bl-note').value.trim(),
           });
           toast('Tagihan baru berhasil dibuat.');
+          if (el.querySelector('#bl-send-email').checked) {
+            try {
+              const { delivery } = await sendBillByEmail(bill);
+              toast(
+                delivery.sent
+                  ? `Tagihan dikirim ke ${bill.email || 'email penghuni'}.`
+                  : 'Email belum dikonfigurasi. Tagihan tetap tersimpan.',
+                delivery.sent ? 'success' : 'warning',
+              );
+            } catch (error) {
+              toast(`Tagihan tersimpan, email gagal dikirim: ${error.message}`, 'warning');
+            }
+          }
           close();
         } catch (error) {
           toast(error.message, 'error');
@@ -245,6 +275,13 @@ export function openManualInvoiceModal(preselectedRoomId = '') {
             <input id="iv-due" type="date" class="input" value="${todayISO()}" />
           </div>
         </div>
+        <label class="flex items-start gap-2.5 rounded-xl border border-line bg-cream/60 p-3 cursor-pointer">
+          <input id="iv-send-email" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" checked />
+          <span>
+            <span class="block text-xs font-bold text-stone-700">Kirim invoice ke email penerima</span>
+            <span class="block text-[10px] text-stone-500 mt-0.5">Salinan juga dikirim ke email admin default.</span>
+          </span>
+        </label>
       </form>
     `,
     footer: `
@@ -278,7 +315,7 @@ export function openManualInvoiceModal(preselectedRoomId = '') {
       syncMode();
       syncTenantName();
 
-      el.querySelector('#invoice-form').addEventListener('submit', (event) => {
+      el.querySelector('#invoice-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         try {
           const mode = currentMode();
@@ -297,6 +334,19 @@ export function openManualInvoiceModal(preselectedRoomId = '') {
             dueDate: el.querySelector('#iv-due').value || todayISO(),
           });
           toast('Invoice manual berhasil diterbitkan.');
+          if (el.querySelector('#iv-send-email').checked) {
+            try {
+              const { delivery } = await sendInvoiceByEmail(invoice);
+              toast(
+                delivery.sent
+                  ? `Invoice dikirim ke ${invoice.email || 'email penerima'}.`
+                  : 'Email belum dikonfigurasi. Invoice tetap tersimpan.',
+                delivery.sent ? 'success' : 'warning',
+              );
+            } catch (error) {
+              toast(`Invoice tersimpan, email gagal dikirim: ${error.message}`, 'warning');
+            }
+          }
           close();
           setTimeout(() => openInvoiceIssuedModal(invoice), 0);
         } catch (error) {

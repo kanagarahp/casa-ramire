@@ -67,12 +67,33 @@ function normalizeCatalog(input) {
         .map((item) => item.trim())
         .filter(Boolean);
 
-  const rooms = Array.isArray(input?.rooms) ? input.rooms : [];
+  const rooms = (Array.isArray(input?.rooms) ? input.rooms : []).map((room) => {
+    const floor = String(room.lantai || '2');
+    return {
+      ...room,
+      lantai: floor,
+      tipe: room.tipe || (floor === '1' ? 'Deluxe VIP' : 'Deluxe'),
+      dailyEnabled: room.dailyEnabled !== false,
+      monthlyEnabled: floor === '1' ? false : room.monthlyEnabled !== false,
+    };
+  });
   const availability = input?.availability || {
     total: rooms.length,
     available: rooms.filter((room) => room.status === 'kosong').length,
     occupied: rooms.filter((room) => room.status === 'terisi').length,
     booked: rooms.filter((room) => room.status === 'booking').length,
+    dailyAvailable: rooms.filter(
+      (room) => room.status === 'kosong' && room.dailyEnabled,
+    ).length,
+    monthlyAvailable: rooms.filter(
+      (room) => room.status === 'kosong' && room.monthlyEnabled,
+    ).length,
+  };
+  const parking = input?.parking || {
+    capacity: Number(propertyInput.parkingCapacity) || 15,
+    used: 0,
+    available: Number(propertyInput.parkingCapacity) || 15,
+    full: false,
   };
 
   return {
@@ -84,11 +105,13 @@ function normalizeCatalog(input) {
       facilities: facilities.length ? facilities : FALLBACK_FACILITIES,
     },
     pricing: {
+      lantai1: {},
       lantai2: {},
       lantai3: {},
       ...(input?.pricing || {}),
     },
     availability,
+    parking,
     gallery: Array.isArray(input?.gallery)
       ? input.gallery.filter((item) => String(item?.url || '').trim())
       : [],
@@ -98,11 +121,31 @@ function normalizeCatalog(input) {
 }
 
 function floorKeyFor(floor) {
-  return String(floor) === '3' ? 'lantai3' : 'lantai2';
+  const value = String(floor);
+  if (value === '1') return 'lantai1';
+  if (value === '3') return 'lantai3';
+  return 'lantai2';
 }
 
 function floorNumber(key) {
+  if (key === 'lantai1') return '1';
   return key === 'lantai3' ? '3' : '2';
+}
+
+function roomTypeFor(room) {
+  return String(room?.tipe || (String(room?.lantai) === '1' ? 'Deluxe VIP' : 'Deluxe'));
+}
+
+function dailyRooms(catalog) {
+  return (catalog.rooms || []).filter(
+    (room) => room.status === 'kosong' && room.dailyEnabled !== false,
+  );
+}
+
+function monthlyRooms(catalog) {
+  return (catalog.rooms || []).filter(
+    (room) => room.status === 'kosong' && room.monthlyEnabled !== false,
+  );
 }
 
 function rateFor(catalog, floor, periode) {
@@ -180,7 +223,12 @@ function quoteFor(catalog, { floor, periode, startDate, endDate, promo, car }) {
       ? (base * toNumber(promo.value)) / 100
       : toNumber(promo.value) * chargedMonths;
   const discount = Math.min(base, Math.max(0, Math.round(grossDiscount)));
-  const carTotal = car ? CAR_FEE * chargedMonths : 0;
+  const carRate =
+    period.kind === 'months'
+      ? CAR_FEE
+      : toNumber(catalog.property.carDailyFee) || 10000;
+  const carUnits = period.kind === 'months' ? chargedMonths : units;
+  const carTotal = car ? carRate * carUnits : 0;
   const total = Math.max(0, base - discount) + carTotal;
 
   return {
@@ -234,8 +282,10 @@ function hero(catalog) {
 function availabilitySection(catalog) {
   const available = Number(catalog.availability.available) || 0;
   const availableRooms = catalog.rooms.filter((room) => room.status === 'kosong');
+  const dailyAvailable = dailyRooms(catalog).length;
+  const monthlyAvailable = monthlyRooms(catalog).length;
 
-  const availableByFloor = ['2', '3'].map((floor) => ({
+  const availableByFloor = ['1', '2', '3'].map((floor) => ({
     floor,
     rooms: availableRooms.filter((room) => String(room.lantai) === floor),
   }));
@@ -246,10 +296,10 @@ function availabilitySection(catalog) {
         <div class="grid lg:grid-cols-[1.05fr_0.95fr] gap-6 items-stretch">
           <div class="card rounded-3xl p-6 sm:p-8 flex flex-col">
             <span class="badge-gold">Ketersediaan Kamar</span>
-            <h2 class="page-title mt-3">Satu tipe kamar, banyak pilihan durasi.</h2>
+            <h2 class="page-title mt-3">Harian atau bulanan, pilih sesuai kebutuhan.</h2>
             <p class="page-subtitle max-w-xl">
-              Semua kamar bertipe Deluxe dengan fasilitas yang sama. Lihat nomor kamar yang masih tersedia,
-              lalu pilih kamar dan durasi sewa saat booking.
+              Kamar Deluxe VIP lantai 1 khusus disewakan harian. Kamar bulanan di lantai 2 & 3 yang sedang kosong
+              juga bisa dipakai untuk tamu harian. Kamar yang sudah terisi bulanan tidak tersedia untuk harian.
             </p>
 
             <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 mt-6 flex items-end justify-between gap-4">
@@ -259,6 +309,17 @@ function availabilitySection(catalog) {
                 <p class="text-[11px] font-semibold text-emerald-800 mt-1">kamar siap ditempati</p>
               </div>
               <span class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">${icon('DoorOpen', 'w-6 h-6')}</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mt-3">
+              <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <p class="text-[9px] font-extrabold uppercase tracking-wider text-amber-700">Bisa harian</p>
+                <p class="text-lg font-black text-amber-900 leading-none mt-1">${dailyAvailable} kamar</p>
+              </div>
+              <div class="rounded-xl border border-brand/20 bg-brand-50 px-3 py-2.5">
+                <p class="text-[9px] font-extrabold uppercase tracking-wider text-brand">Bisa bulanan</p>
+                <p class="text-lg font-black text-brand leading-none mt-1">${monthlyAvailable} kamar</p>
+              </div>
             </div>
 
             <div class="rounded-2xl border border-line bg-cream/60 p-3.5 mt-4 text-[11px] text-stone-600 leading-relaxed">
@@ -294,7 +355,7 @@ function availabilitySection(catalog) {
                               ? `<div class="flex flex-wrap gap-1.5">${group.rooms
                                   .map(
                                     (room) =>
-                                      `<button type="button" class="badge-green normal-case tracking-normal hover:bg-emerald-200 transition" data-book-room="${esc(room.id)}" data-book-floor="${esc(room.lantai)}" title="Booking Kamar ${esc(room.nomor)}">Kamar ${esc(room.nomor)}</button>`,
+                                      `<button type="button" class="badge-green normal-case tracking-normal hover:bg-emerald-200 transition" data-book-room="${esc(room.id)}" data-book-floor="${esc(room.lantai)}" data-book-type="${room.monthlyEnabled === false ? 'harian' : ''}" title="Booking Kamar ${esc(room.nomor)} — ${esc(roomTypeFor(room))}">Kamar ${esc(room.nomor)}${room.monthlyEnabled === false ? ' · VIP' : ''}</button>`,
                                   )
                                   .join('')}</div>`
                               : `<p class="text-xs text-stone-500 italic">Tidak ada kamar kosong di lantai ini.</p>`
@@ -307,12 +368,105 @@ function availabilitySection(catalog) {
                     </div>`
               }
             </div>
-            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 mt-5 text-[11px] text-amber-900 leading-relaxed">
-              <b>Membawa mobil?</b> Ada tambahan parkir ${rupiah(CAR_FEE)}/bulan. Pilih opsi mobil di form booking —
-              biaya otomatis masuk ke estimasi.
+            <div class="rounded-2xl border ${catalog.parking?.full ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-amber-200 bg-amber-50 text-amber-900'} p-3.5 mt-5 text-[11px] leading-relaxed">
+              ${
+                catalog.parking?.full
+                  ? `<b>Parkir mobil penuh (${catalog.parking.used}/${catalog.parking.capacity}).</b> Booking online saat ini tidak dapat menambahkan parkir mobil. Silakan hubungi admin untuk daftar tunggu.`
+                  : `<b>Membawa mobil?</b> Tambahan parkir ${rupiah(CAR_FEE)}/bulan atau ${rupiah(catalog.property.carDailyFee || 10000)}/hari. Sisa slot: <b>${catalog.parking?.available ?? catalog.property.parkingCapacity ?? 15}</b> dari ${catalog.parking?.capacity ?? 15}.`
+              }
             </div>
             <div class="rounded-2xl border border-line bg-cream/60 p-3.5 mt-3 text-[11px] text-stone-600 leading-relaxed">
               Deposit ${rupiah(catalog.property.deposit || 0)} dibayarkan saat check-in dan dikembalikan sesuai ketentuan.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function dailySection(catalog) {
+  const rooms = dailyRooms(catalog).sort((a, b) =>
+    String(a.nomor).localeCompare(String(b.nomor), undefined, { numeric: true }),
+  );
+  const vip = rooms.filter((room) => String(room.lantai) === '1');
+  const regular = rooms.filter((room) => String(room.lantai) !== '1');
+  const dailyRate = (floor) => rateFor(catalog, floor, 'harian');
+  const parking = catalog.parking || {};
+
+  const roomButton = (room) => `
+    <button type="button" class="text-left rounded-2xl border border-line bg-white p-3.5 hover:border-gold-300 hover:shadow-sm transition" data-book-room="${esc(room.id)}" data-book-floor="${esc(room.lantai)}" data-book-type="harian">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <p class="text-[9px] font-extrabold uppercase tracking-wider text-gold-700">${esc(roomTypeFor(room))}</p>
+          <p class="text-base font-black text-stone-800 mt-0.5">Kamar ${esc(room.nomor)}</p>
+        </div>
+        <span class="badge-green">Harian</span>
+      </div>
+      <p class="text-[11px] text-stone-600 mt-1">Lantai ${esc(room.lantai)} · ${rupiah(dailyRate(room.lantai))}/hari</p>
+      <p class="text-[10px] font-bold text-brand mt-2">Pilih kamar ini →</p>
+    </button>
+  `;
+
+  return `
+    <section id="harian" class="scroll-mt-20 py-12 sm:py-16 bg-white border-y border-line">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6">
+        <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+          <div class="max-w-2xl">
+            <span class="badge-gold">Booking Harian</span>
+            <h2 class="page-title mt-3">Menginap singkat? Ada kamar harian.</h2>
+            <p class="page-subtitle">
+              Kamar Deluxe VIP lantai 1 dan kamar bulanan yang sedang kosong bisa dipesan harian.
+              Kamar yang sudah terisi bulanan tidak dapat dibooking harian.
+            </p>
+          </div>
+          <button type="button" class="btn-primary btn-sm" data-book-daily>${icon('CalendarClock', 'w-4 h-4')} Booking Harian</button>
+        </div>
+
+        ${
+          parking.full
+            ? `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 mt-5 text-xs text-rose-900 leading-relaxed">
+                <b>Parkir mobil penuh (${parking.used}/${parking.capacity}).</b> Booking online belum bisa menambahkan parkir mobil sampai ada slot kosong.
+              </div>`
+            : `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 mt-5 text-xs text-amber-900 leading-relaxed">
+                Parkir mobil tersedia <b>${parking.available ?? 15}</b> slot dari ${parking.capacity ?? 15}. Tambahan parkir mobil ${rupiah(catalog.property.carDailyFee || 10000)}/hari untuk sewa harian.
+              </div>`
+        }
+
+        <div class="grid lg:grid-cols-[0.9fr_1.1fr] gap-4 mt-5">
+          <div class="card rounded-3xl p-5 sm:p-6">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <span class="badge-gold">Deluxe VIP · Lantai 1</span>
+                <h3 class="text-xl font-black text-stone-800 mt-3">Kamar 101</h3>
+                <p class="text-xs text-stone-500 mt-1">Satu-satunya kamar VIP yang dikhususkan untuk harian.</p>
+              </div>
+              <span class="w-11 h-11 rounded-xl bg-gold-50 text-gold-700 flex items-center justify-center shrink-0">${icon('Sparkles', 'w-5 h-5')}</span>
+            </div>
+            <p class="text-3xl font-black text-stone-800 mt-4">${rupiah(dailyRate('1'))}<span class="text-xs font-bold text-stone-500"> /hari</span></p>
+            <div class="mt-4">
+              ${
+                vip.length
+                  ? vip.map(roomButton).join('')
+                  : `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900">Kamar VIP sedang terisi. Silakan cek lagi nanti atau hubungi admin.</div>`
+              }
+            </div>
+          </div>
+
+          <div class="card rounded-3xl p-5 sm:p-6">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">Kamar bulanan yang kosong</p>
+                <p class="text-xs text-stone-500 mt-1">Bisa dipakai harian selama belum terisi bulanan.</p>
+              </div>
+              <span class="badge-green">${regular.length} tersedia</span>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-2.5 mt-4">
+              ${
+                regular.length
+                  ? regular.map(roomButton).join('')
+                  : `<p class="text-xs text-stone-500 italic sm:col-span-2">Belum ada kamar bulanan kosong yang bisa dipakai harian.</p>`
+              }
             </div>
           </div>
         </div>
@@ -355,14 +509,15 @@ function priceRows(catalog, floorKey, floor) {
 function priceCard(catalog, floorKey) {
   const floor = floorNumber(floorKey);
   const data = catalog.pricing?.[floorKey] || {};
+  const isVip = floor === '1';
 
   return `
     <div class="card rounded-3xl p-5 sm:p-6 flex flex-col">
       <div class="flex items-start justify-between gap-3">
         <div>
           <span class="badge-gold">Lantai ${floor}</span>
-          <h3 class="text-xl font-black text-stone-800 mt-3">Tipe Deluxe · Lantai ${floor}</h3>
-          <p class="text-xs text-stone-500 mt-1">Fasilitas sama, harga menyesuaikan lantai.</p>
+          <h3 class="text-xl font-black text-stone-800 mt-3">Tipe ${isVip ? 'Deluxe VIP' : 'Deluxe'} · Lantai ${floor}</h3>
+          <p class="text-xs text-stone-500 mt-1">${isVip ? 'Kamar 101 · khusus sewa harian.' : 'Fasilitas sama, harga menyesuaikan lantai.'}</p>
         </div>
         <span class="w-10 h-10 rounded-xl bg-brand-50 text-brand flex items-center justify-center shrink-0">${icon('Building2', 'w-5 h-5')}</span>
       </div>
@@ -371,8 +526,8 @@ function priceCard(catalog, floorKey) {
         ${priceRows(catalog, floorKey, floor) || '<p class="text-sm text-stone-500">Hubungi admin untuk harga terbaru.</p>'}
       </div>
 
-      <button type="button" class="btn-primary btn-sm mt-5 w-full" data-book-floor="${floor}">
-        ${icon('CalendarClock', 'w-4 h-4')} Booking Lantai ${floor}
+      <button type="button" class="btn-primary btn-sm mt-5 w-full" data-book-floor="${floor}" data-book-type="${isVip ? 'harian' : ''}">
+        ${icon('CalendarClock', 'w-4 h-4')} ${isVip ? 'Booking Harian VIP' : `Booking Lantai ${floor}`}
       </button>
     </div>
   `;
@@ -464,6 +619,7 @@ function pageHtml(catalog, { preview }) {
 
           <nav class="hidden lg:flex items-center gap-1 ml-6" aria-label="Navigasi landing page">
             <button type="button" class="btn-ghost btn-sm" data-scroll="ketersediaan">Ketersediaan</button>
+            <button type="button" class="btn-ghost btn-sm" data-scroll="harian">Harian</button>
             <button type="button" class="btn-ghost btn-sm" data-scroll="galeri">Galeri</button>
             <button type="button" class="btn-ghost btn-sm" data-scroll="harga">Harga</button>
             <button type="button" class="btn-ghost btn-sm" data-scroll="fasilitas">Fasilitas</button>
@@ -524,6 +680,7 @@ function pageHtml(catalog, { preview }) {
         </section>
 
         ${availabilitySection(catalog)}
+        ${dailySection(catalog)}
 
         <section id="galeri" class="scroll-mt-20 py-12 sm:py-16">
           <div class="max-w-6xl mx-auto px-4 sm:px-6">
@@ -551,7 +708,8 @@ function pageHtml(catalog, { preview }) {
               </p>
             </div>
 
-            <div class="grid md:grid-cols-2 gap-4 mt-7">
+            <div class="grid md:grid-cols-3 gap-4 mt-7">
+              ${priceCard(catalog, 'lantai1')}
               ${priceCard(catalog, 'lantai2')}
               ${priceCard(catalog, 'lantai3')}
             </div>
@@ -735,13 +893,38 @@ function summaryHtml(quote, deposit) {
   `;
 }
 
-function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } = {}) {
+function openBookingModal(
+  catalog,
+  { floor = '', periode = '', roomId = '', rentalType = '' } = {},
+) {
   let appliedCode = '';
-  let initialFloor = String(floor);
-  let initialPeriode = String(periode);
-  let selectedRoomId = String(roomId || '');
-  const availableRooms = (catalog.rooms || []).filter((room) => room.status === 'kosong');
+  const dailyAvailable = dailyRooms(catalog);
+  const monthlyAvailable = monthlyRooms(catalog);
   const deposit = Number(catalog.property.deposit) || 0;
+  const parking = catalog.parking || { capacity: 15, used: 0, full: false };
+  const carDailyFee = toNumber(catalog.property.carDailyFee) || 10000;
+  const initialRoom = (catalog.rooms || []).find(
+    (room) => String(room.id) === String(roomId),
+  );
+
+  const initialType =
+    rentalType === 'harian' || rentalType === 'bulanan'
+      ? rentalType
+      : initialRoom?.monthlyEnabled === false || String(floor) === '1'
+        ? 'harian'
+        : periode === 'harian' || periode === 'mingguan'
+          ? 'harian'
+          : 'bulanan';
+  const initialFloor = String(floor || initialRoom?.lantai || '');
+  let selectedRoomId =
+    initialRoom && initialRoom.status === 'kosong' ? String(initialRoom.id) : '';
+
+  const monthlyPeriodKeys = ['1', '3', '6', '12'];
+  const periodKeysFor = (type) => (type === 'harian' ? ['harian'] : monthlyPeriodKeys);
+  const initialPeriodFor = (type) => {
+    const keys = periodKeysFor(type);
+    return keys.includes(String(periode)) ? String(periode) : keys[0];
+  };
 
   const instance = openModal({
     title: 'Booking Kamar',
@@ -769,13 +952,30 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
           </div>
         </div>
 
+        <div>
+          <span class="label">Jenis sewa</span>
+          <div class="grid grid-cols-2 gap-2 rounded-2xl border border-line bg-stone-50/60 p-2">
+            <label class="flex items-start gap-2.5 cursor-pointer rounded-xl bg-white border border-line p-3 hover:border-gold-300">
+              <input type="radio" name="hm-rental-type" value="harian" class="accent-brand mt-0.5" ${initialType === 'harian' ? 'checked' : ''} />
+              <span>
+                <span class="block text-xs font-bold text-stone-800">Harian</span>
+                <span class="block text-[10px] text-stone-500 mt-0.5">VIP lantai 1 atau kamar kosong lantai 2/3.</span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2.5 cursor-pointer rounded-xl bg-white border border-line p-3 hover:border-gold-300">
+              <input type="radio" name="hm-rental-type" value="bulanan" class="accent-brand mt-0.5" ${initialType === 'bulanan' ? 'checked' : ''} />
+              <span>
+                <span class="block text-xs font-bold text-stone-800">Bulanan</span>
+                <span class="block text-[10px] text-stone-500 mt-0.5">Paket 1, 3, 6, atau 12 bulan.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
         <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label class="label" for="hm-floor">Lantai</label>
-            <select id="hm-floor" class="select">
-              <option value="2" ${initialFloor === '2' ? 'selected' : ''}>Lantai 2</option>
-              <option value="3" ${initialFloor === '3' ? 'selected' : ''}>Lantai 3</option>
-            </select>
+            <select id="hm-floor" class="select"></select>
           </div>
           <div>
             <label class="label" for="hm-room">Pilihan kamar</label>
@@ -784,9 +984,7 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
           </div>
           <div>
             <label class="label" for="hm-periode">Durasi sewa</label>
-            <select id="hm-periode" class="select">
-              ${PERIODS.map((period) => `<option value="${period.key}" ${period.key === initialPeriode ? 'selected' : ''}>${period.label}</option>`).join('')}
-            </select>
+            <select id="hm-periode" class="select"></select>
           </div>
           <div>
             <label class="label" for="hm-start">Tanggal mulai</label>
@@ -797,13 +995,20 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
         <div id="hm-end-wrap" class="hidden">
           <label class="label" for="hm-end">Tanggal selesai</label>
           <input id="hm-end" type="date" class="input" />
+          <p class="hint mt-1">Untuk sewa harian, tanggal selesai menentukan jumlah hari.</p>
         </div>
 
-        <label class="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/60 p-4 cursor-pointer">
-          <input id="hm-car" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" />
+        <label class="flex items-start gap-3 rounded-2xl border ${parking.full ? 'border-rose-200 bg-rose-50/60 cursor-not-allowed' : 'border-amber-200 bg-amber-50/60 cursor-pointer'} p-4">
+          <input id="hm-car" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" ${parking.full ? 'disabled' : ''} />
           <span>
             <span class="block text-xs font-bold text-stone-800">Saya membawa mobil</span>
-            <span class="block text-[11px] text-stone-600 mt-0.5">Tambahan parkir ${rupiah(CAR_FEE)}/bulan.</span>
+            <span id="hm-car-note" class="block text-[11px] ${parking.full ? 'text-rose-700 font-semibold' : 'text-stone-600'} mt-0.5">
+              ${
+                parking.full
+                  ? `Parkir mobil penuh (${parking.used}/${parking.capacity}). Booking online tidak dapat menambahkan parkir mobil.`
+                  : `Tambahan parkir ${rupiah(CAR_FEE)}/bulan atau ${rupiah(carDailyFee)}/hari. Sisa ${parking.available ?? parking.capacity - parking.used} slot.`
+              }
+            </span>
           </span>
         </label>
 
@@ -853,27 +1058,77 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
       const startInput = el.querySelector('#hm-start');
       const endInput = el.querySelector('#hm-end');
       const endWrap = el.querySelector('#hm-end-wrap');
+      const carInput = el.querySelector('#hm-car');
       const submitButton = el.querySelector('[data-submit]');
       const isShortPeriod = (periode) => periode === 'harian' || periode === 'mingguan';
 
+      const currentType = () =>
+        el.querySelector('input[name="hm-rental-type"]:checked')?.value || 'bulanan';
+      const roomsFor = (type) => (type === 'harian' ? dailyAvailable : monthlyAvailable);
+      const floorsFor = (type) =>
+        type === 'harian'
+          ? ['1', '2', '3']
+          : ['2', '3'];
+
+      let floorsPainted = false;
+      const paintFloors = () => {
+        const type = currentType();
+        const floors = floorsFor(type);
+        const rooms = roomsFor(type);
+        const previous = floorSelect.value;
+        const usable = (floor) =>
+          floors.includes(floor) &&
+          rooms.some((room) => String(room.lantai) === String(floor));
+        const preferred =
+          !floorsPainted && usable(initialFloor)
+            ? initialFloor
+            : usable(previous)
+              ? previous
+              : floors.find((item) => usable(item)) || floors[0];
+        floorsPainted = true;
+
+        floorSelect.innerHTML = floors
+          .map((floor) => `<option value="${floor}" ${String(floor) === String(preferred) ? 'selected' : ''}>Lantai ${floor}${floor === '1' ? ' · VIP' : ''}</option>`)
+          .join('');
+      };
+
+      const paintPeriods = () => {
+        const type = currentType();
+        const keys = periodKeysFor(type);
+        const previous = periodeSelect.value;
+        const preferred = keys.includes(previous)
+          ? previous
+          : initialPeriodFor(type);
+        periodeSelect.innerHTML = PERIODS.filter((period) => keys.includes(period.key))
+          .map(
+            (period) =>
+              `<option value="${period.key}" ${period.key === preferred ? 'selected' : ''}>${period.label}</option>`,
+          )
+          .join('');
+        periodeSelect.disabled = keys.length === 1;
+      };
+
       const paintRoomOptions = () => {
-        const floorRooms = availableRooms.filter(
+        const type = currentType();
+        const floorRooms = roomsFor(type).filter(
           (room) => String(room.lantai) === String(floorSelect.value),
         );
         roomSelect.innerHTML = [
           `<option value="">Admin pilihkan</option>`,
-          ...floorRooms.map(
-            (room) =>
-              `<option value="${esc(room.id)}" ${String(room.id) === String(selectedRoomId) ? 'selected' : ''}>Kamar ${esc(room.nomor)}</option>`,
-          ),
+          ...floorRooms.map((room) => {
+            const price = rateFor(catalog, room.lantai, type === 'harian' ? 'harian' : '1');
+            return `<option value="${esc(room.id)}" ${String(room.id) === String(selectedRoomId) ? 'selected' : ''}>Kamar ${esc(room.nomor)} · ${esc(roomTypeFor(room))} · ${rupiah(price)}</option>`;
+          }),
         ].join('');
         if (!floorRooms.some((room) => String(room.id) === String(selectedRoomId))) {
           selectedRoomId = '';
           roomSelect.value = '';
         }
       };
+
       roomSelect.addEventListener('change', () => {
         selectedRoomId = roomSelect.value;
+        paintSummary();
       });
 
       const toggleEnd = () => {
@@ -897,12 +1152,12 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
           return { error: 'Kode promo ini sudah habis dipakai.' };
         }
         return quoteFor(catalog, {
-          floor: el.querySelector('#hm-floor').value,
+          floor: floorSelect.value,
           periode: periodeSelect.value,
           startDate: startInput.value,
           endDate: endInput.value,
           promo,
-          car: Boolean(el.querySelector('#hm-car').checked),
+          car: Boolean(carInput.checked),
         });
       };
 
@@ -935,6 +1190,18 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
         const value = promo.type === 'persen' ? `${toNumber(promo.value)}%` : rupiah(promo.value);
         promoStatus.className = 'text-[11px] font-bold text-emerald-700';
         promoStatus.textContent = `Promo ${promo.name} (${value}) diterapkan.${Number.isFinite(remaining) ? ` Sisa kuota: ${remaining}.` : ''}`;
+      };
+
+      const paintAll = ({ resetRoom = false } = {}) => {
+        if (resetRoom) {
+          selectedRoomId = '';
+          floorSelect.value = '';
+        }
+        paintFloors();
+        paintPeriods();
+        paintRoomOptions();
+        toggleEnd();
+        paintSummary();
       };
 
       el.querySelector('[data-apply-promo]')?.addEventListener('click', () => {
@@ -975,7 +1242,10 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
         }
       });
 
-      el.querySelector('#hm-car').addEventListener('change', paintSummary);
+      carInput.addEventListener('change', paintSummary);
+      el.querySelectorAll('input[name="hm-rental-type"]').forEach((radio) => {
+        radio.addEventListener('change', () => paintAll({ resetRoom: true }));
+      });
       floorSelect.addEventListener('change', () => {
         paintRoomOptions();
         paintSummary();
@@ -995,6 +1265,15 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
       });
       endInput.addEventListener('change', paintSummary);
 
+      // Keep an explicitly selected room card only when it fits the chosen type.
+      if (
+        selectedRoomId &&
+        !roomsFor(initialType).some((room) => String(room.id) === selectedRoomId)
+      ) {
+        selectedRoomId = '';
+      }
+      paintFloors();
+      paintPeriods();
       paintRoomOptions();
       toggleEnd();
       paintPromoStatus();
@@ -1015,9 +1294,15 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
         if (phone.replace(/\D/g, '').length < 8) return toast('Nomor WhatsApp tidak valid.', 'warning');
         if (!isValidEmail(email)) return toast('Alamat email tidak valid.', 'warning');
 
-        const chosenRoom = availableRooms.find(
+        const type = currentType();
+        const chosenRoom = roomsFor(type).find(
           (room) => String(room.id) === String(roomSelect.value),
         );
+
+        if (carInput.checked && parking.full) {
+          toast(`Parkir mobil penuh (${parking.used}/${parking.capacity}). Silakan booking tanpa mobil atau hubungi admin.`, 'error');
+          return;
+        }
 
         const payload = {
           name,
@@ -1030,13 +1315,14 @@ function openBookingModal(catalog, { floor = '2', periode = '1', roomId = '' } =
             relation: value('#hm-ec-relation'),
             phone: value('#hm-ec-phone'),
           },
-          floor: el.querySelector('#hm-floor').value,
+          rentalType: type,
+          floor: floorSelect.value,
           roomId: chosenRoom?.id || '',
           roomNumber: chosenRoom?.nomor || '',
           periode: periodeSelect.value,
           startDate: startInput.value || todayISO(),
           endDate: isShortPeriod(periodeSelect.value) ? endInput.value : '',
-          car: Boolean(el.querySelector('#hm-car').checked),
+          car: Boolean(carInput.checked),
           promoCode: appliedCode,
           estimate: quote.total,
         };
@@ -1079,19 +1365,24 @@ function openBookingSuccessModal(catalog, request, quote) {
         <div class="rounded-2xl border border-line bg-cream/60 p-4 text-xs space-y-2">
           <div class="flex justify-between gap-3"><span class="text-stone-500">Nama</span><b class="text-stone-800">${esc(request.name)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Email</span><b class="text-stone-800 break-all text-right">${esc(request.email)}</b></div>
+          <div class="flex justify-between gap-3"><span class="text-stone-500">Jenis sewa</span><b class="text-stone-800">${request.periode === 'harian' ? 'Harian' : 'Bulanan'}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Lantai</span><b class="text-stone-800">Lantai ${esc(request.floor || '—')}</b></div>
           ${request.roomNumber ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Kamar pilihan</span><b class="text-stone-800">Kamar ${esc(request.roomNumber)}</b></div>` : ''}
           <div class="flex justify-between gap-3"><span class="text-stone-500">Durasi</span><b class="text-stone-800">${esc(quote.period.label)}</b></div>
           <div class="flex justify-between gap-3"><span class="text-stone-500">Periode</span><b class="text-stone-800 text-right">${formatDate(quote.start)} — ${formatDate(quote.end)}</b></div>
-          ${request.car ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Parkir mobil</span><b class="text-stone-800">${rupiah(CAR_FEE)}/bulan</b></div>` : ''}
+          ${request.car ? `<div class="flex justify-between gap-3"><span class="text-stone-500">Parkir mobil</span><b class="text-stone-800">${rupiah(quote.carTotal)}</b></div>` : ''}
           <div class="flex justify-between gap-3 pt-2 border-t border-line"><span class="text-stone-500">Estimasi total sewa</span><b class="text-stone-800">${rupiah(quote.total)}</b></div>
           <p class="text-[10px] text-stone-500">Deposit ${rupiah(catalog.property.deposit || 0)} dibayar saat check-in. Total final dikonfirmasi admin.</p>
         </div>
 
         ${
           request.offline
-            ? `<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">Mode lokal: API booking belum tersedia. Permintaan tersimpan di perangkat ini dan bisa diproses dari menu Booking Online.</div>`
-            : `<div class="rounded-xl border border-line bg-white px-3 py-2.5 text-[11px] text-stone-600 leading-relaxed">Admin akan mengirim konfirmasi ke <b>${esc(request.email)}</b> atau menghubungi WhatsApp <b>${esc(request.phone)}</b>.</div>`
+            ? `<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-900">Mode lokal: server booking belum tersedia. Permintaan tersimpan di perangkat ini dan bisa diproses dari menu Booking Online.</div>`
+            : `<div class="rounded-xl border border-line bg-white px-3 py-2.5 text-[11px] text-stone-600 leading-relaxed">
+                ${request.emailSent ? `Notifikasi booking sudah dikirim ke <b>${esc(request.email)}</b> dan email admin. ` : ''}
+                Admin akan menghubungi WhatsApp <b>${esc(request.phone)}</b> untuk konfirmasi.
+                ${request.emailNote ? `<span class="block text-amber-700 mt-1">${esc(request.emailNote)}</span>` : ''}
+              </div>`
         }
       </div>
     `,
@@ -1134,11 +1425,18 @@ function bindLanding(root, catalog) {
     button.addEventListener('click', () => openBookingModal(catalog));
   });
 
+  root.querySelectorAll('[data-book-daily]').forEach((button) => {
+    button.addEventListener('click', () =>
+      openBookingModal(catalog, { rentalType: 'harian' }),
+    );
+  });
+
   root.querySelectorAll('[data-book-floor]').forEach((button) => {
     button.addEventListener('click', () =>
       openBookingModal(catalog, {
         floor: button.dataset.bookFloor,
         periode: button.dataset.bookPeriod || '1',
+        rentalType: button.dataset.bookType || '',
       }),
     );
   });
@@ -1148,6 +1446,7 @@ function bindLanding(root, catalog) {
       openBookingModal(catalog, {
         floor: button.dataset.bookFloor,
         roomId: button.dataset.bookRoom,
+        rentalType: button.dataset.bookType || '',
       }),
     );
   });
@@ -1217,7 +1516,21 @@ export function render(root) {
       catalog = {
         ...catalog,
         availability: live.availability,
-        rooms: live.rooms.length ? live.rooms : catalog.rooms,
+        parking: live.parking || catalog.parking,
+        pricing: live.pricing
+          ? {
+              lantai1: { ...(catalog.pricing?.lantai1 || {}), ...(live.pricing.lantai1 || {}) },
+              lantai2: { ...(catalog.pricing?.lantai2 || {}), ...(live.pricing.lantai2 || {}) },
+              lantai3: { ...(catalog.pricing?.lantai3 || {}), ...(live.pricing.lantai3 || {}) },
+            }
+          : catalog.pricing,
+        rooms: (live.rooms.length ? live.rooms : catalog.rooms).map((room) => ({
+          ...room,
+          tipe: room.tipe || (String(room.lantai) === '1' ? 'Deluxe VIP' : 'Deluxe'),
+          dailyEnabled: room.dailyEnabled !== false,
+          monthlyEnabled:
+            String(room.lantai) === '1' ? false : room.monthlyEnabled !== false,
+        })),
       };
       paint(root, catalog, { preview: false, source: published ? 'published' : 'local' });
     } catch (error) {

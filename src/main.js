@@ -4,6 +4,7 @@ import { NAV_ITEMS, PAGE_META } from './core/constants.js';
 import { getRoute, navigate, onRouteChange } from './core/router.js';
 import { subscribe } from './core/store.js';
 import { getActiveUser, isOwner } from './services/auth.js';
+import { runBillingReminders } from './services/reminders.js';
 import { startSync, stopSync } from './services/sync.js';
 import { closeAllModals } from './ui/modal.js';
 import { toast } from './ui/toast.js';
@@ -12,6 +13,7 @@ import * as homeView from './views/home.js';
 import * as dashboardView from './views/dashboard.js';
 import * as posView from './views/pos.js';
 import * as bookingsView from './views/bookings.js';
+import * as dailyView from './views/daily.js';
 import * as roomsView from './views/rooms.js';
 import * as galleryView from './views/gallery.js';
 import * as pricingView from './views/pricing.js';
@@ -31,6 +33,7 @@ const VIEWS = {
   dashboard: dashboardView,
   pos: posView,
   bookings: bookingsView,
+  daily: dailyView,
   rooms: roomsView,
   gallery: galleryView,
   pricing: pricingView,
@@ -47,6 +50,17 @@ const OWNER_ONLY = new Set(NAV_ITEMS.filter((item) => item.ownerOnly).map((item)
 let lastUserId = null;
 let lastRoute = null;
 let scheduled = false;
+let remindersScheduled = false;
+
+function scheduleBillingReminders() {
+  if (remindersScheduled) return;
+  remindersScheduled = true;
+  window.setTimeout(() => {
+    runBillingReminders({ silent: true }).catch((error) => {
+      console.warn('[reminders] gagal dijalankan', error.message);
+    });
+  }, 4000);
+}
 
 function scheduleRender() {
   if (scheduled) return;
@@ -110,6 +124,7 @@ function render() {
   }
 
   startSync();
+  scheduleBillingReminders();
 
   if (OWNER_ONLY.has(route) && !isOwner()) {
     toast('Halaman tersebut hanya dapat diakses oleh owner.', 'warning');

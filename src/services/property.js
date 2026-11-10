@@ -9,6 +9,16 @@ function must(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function periodsForRoom(room) {
+  if (!room) return [];
+  if (String(room.lantai) === '1' || room.monthlyEnabled === false) return ['harian'];
+  return [...PERIOD_KEYS];
+}
+
+function roomSupportsPeriod(room, periode) {
+  return periodsForRoom(room).includes(String(periode));
+}
+
 export function getRooms() {
   return getState().rooms;
 }
@@ -37,25 +47,30 @@ export function getRoomOfTenant(tenant) {
   return null;
 }
 
-export function addRoom({ nomor, lantai }) {
+export function addRoom({ nomor, lantai, tipe = '' }) {
   const number = String(nomor || '').trim();
   const floor = String(lantai || '').trim();
   must(/^\d{2,4}$/.test(number), 'Nomor kamar harus berupa 2–4 digit angka.');
-  must(['2', '3'].includes(floor), 'Lantai tidak valid.');
+  must(['1', '2', '3'].includes(floor), 'Lantai tidak valid.');
 
   const state = getState();
   must(!state.rooms.some((room) => room.nomor === number), `Kamar ${number} sudah ada.`);
+  const isVip = floor === '1';
+  const roomType = isVip ? 'Deluxe VIP' : String(tipe || 'Deluxe').trim() || 'Deluxe';
 
   update((draft) => {
     draft.rooms.push({
       id: nextId(draft.rooms),
       nomor: number,
       lantai: floor,
+      tipe: roomType,
       status: 'kosong',
       tenantId: null,
       booking: null,
       photo: '',
       photoUrl: '',
+      dailyEnabled: true,
+      monthlyEnabled: !isVip,
     });
   });
 }
@@ -191,6 +206,10 @@ export function saveBooking(roomId, payload) {
   const room = getRoom(roomId);
   must(room, 'Kamar tidak ditemukan.');
   must(room.status !== 'terisi', 'Kamar sedang dihuni. Gunakan perpanjangan atau pindah kamar.');
+  must(
+    roomSupportsPeriod(room, payload.periode),
+    `Kamar ${room.nomor} tidak mendukung durasi sewa tersebut.`,
+  );
 
   const guest = validateGuest(payload);
   const addons = effectiveAddons(payload);
@@ -255,6 +274,89 @@ export function cancelBooking(roomId) {
     target.tenantId = null;
     target.booking = null;
   });
+}
+
+/**
+ * Move an existing booking to another vacant room without deleting it.
+ * The guest data and deposit history are preserved; the price is recalculated
+ * using the destination room's floor rate.
+ */
+export function moveBooking(roomId, targetRoomId) {
+  const source = getRoom(roomId);
+  must(source?.booking, 'Booking pada kamar asal tidak ditemukan.');
+  const target = getRoom(targetRoomId);
+  must(target, 'Kamar tujuan tidak ditemukan.');
+  must(String(source.id) !== String(target.id), 'Kamar tujuan sama dengan kamar saat ini.');
+  must(target.status === 'kosong', 'Kamar tujuan tidak kosong.');
+
+  const booking = source.booking;
+  must(
+    roomSupportsPeriod(target, booking.periode),
+    `Kamar ${target.nomor} tidak mendukung durasi sewa ${booking.periode}.`,
+  );
+
+  const addons = normalizeAddons(booking.addons);
+  const promo = booking.promoId
+    ? {
+        id: booking.promoId,
+        name: booking.promoName,
+        type: booking.promoType,
+        value: booking.promoValue,
+      }
+    : null;
+  const quote = buildQuoteFor(target, {
+    periode: booking.periode,
+    startDate: booking.startDate,
+    endDate: booking.endDate,
+    promo,
+    addons,
+    depositEnabled: toNumber(booking.deposit) > 0,
+    depositValue: booking.deposit,
+    depositPaid: toNumber(booking.depositPaid) > 0,
+    payOption: booking.payOption === 'full' ? 'full' : 'partial',
+  });
+  const depositPaid = Math.min(toNumber(booking.depositPaid), quote.deposit);
+
+  update((draft) => {
+    const sourceDraft = draft.rooms.find((item) => String(item.id) === String(roomId));
+    const targetDraft = draft.rooms.find((item) => String(item.id) === String(targetRoomId));
+    if (!sourceDraft || !targetDraft) throw new Error('Kamar tidak ditemukan.');
+
+    targetDraft.status = 'booking';
+    targetDraft.tenantId = null;
+    targetDraft.booking = {
+      ...booking,
+      periode: quote.periode,
+      startDate: quote.startDate,
+      endDate: quote.endDate,
+      addons,
+      ...promoSnapshot(quote),
+      base: quote.base,
+      discount: quote.discount,
+      rentTotal: quote.rentTotal,
+      addonTotal: quote.addonTotal,
+      grandTotal: quote.grandTotal,
+      deposit: quote.deposit,
+      depositPaid,
+      depositHistory: Array.isArray(booking.depositHistory) ? booking.depositHistory : [],
+      payOption: quote.payOption,
+      payNow: quote.payNow,
+      remaining: quote.remaining,
+      monthlyCharge: quote.monthlyCharge,
+      movedFrom: {
+        roomId: source.id,
+        roomNumber: source.nomor,
+        at: new Date().toISOString(),
+      },
+      updatedAt: new Date().toISOString(),
+    };
+
+    sourceDraft.status = 'kosong';
+    sourceDraft.tenantId = null;
+    sourceDraft.booking = null;
+  });
+
+  return getRoom(targetRoomId);
 }
 
 /* ------------------------------------------------------------------ */
@@ -383,6 +485,10 @@ export function checkInDirect(roomId, payload) {
   const room = getRoom(roomId);
   must(room, 'Kamar tidak ditemukan.');
   must(room.status === 'kosong', 'Kamar ini tidak kosong. Muat ulang data.');
+  must(
+    roomSupportsPeriod(room, payload.periode),
+    `Kamar ${room.nomor} tidak mendukung durasi sewa tersebut.`,
+  );
 
   const guest = validateGuest(payload);
   const addons = effectiveAddons(payload);
@@ -545,6 +651,10 @@ export function moveTenant(tenantId, roomId, date = todayISO()) {
   must(newRoom, 'Kamar tujuan tidak ditemukan.');
   must(newRoom.status === 'kosong', 'Kamar tujuan tidak kosong.');
   must(!oldRoom || oldRoom.id !== newRoom.id, 'Kamar tujuan sama dengan kamar saat ini.');
+  must(
+    roomSupportsPeriod(newRoom, tenant.periode),
+    `Kamar ${newRoom.nomor} tidak mendukung durasi sewa ${tenant.periode}.`,
+  );
 
   update((draft) => {
     const target = draft.tenants.find((item) => String(item.id) === String(tenantId));

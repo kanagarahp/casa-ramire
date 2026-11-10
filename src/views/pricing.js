@@ -18,18 +18,19 @@ import { icon } from '../ui/icons.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 
-function rateCard(floor, rates) {
+function rateCard(floor, rates, periods = PERIODS) {
+  const isVip = String(floor) === '1';
   return `
     <div class="card p-5 rounded-2xl">
       <div class="flex items-start justify-between gap-3 border-b border-line pb-3 mb-4">
         <div>
           <h2 class="font-black text-lg text-stone-800">Pricelist Lantai ${floor}</h2>
-          <p class="text-xs text-stone-500">Kamar Deluxe ${floor === '2' ? '201 – 221' : '301 – 321'}</p>
+          <p class="text-xs text-stone-500">${isVip ? 'Kamar 101 · Deluxe VIP · khusus harian' : `Kamar Deluxe ${floor === '2' ? '201 – 221' : '301 – 321'}`}</p>
         </div>
         <button type="button" class="btn-primary btn-sm" data-save-floor="${floor}">${icon('Check', 'w-4 h-4')} Simpan</button>
       </div>
       <div class="grid grid-cols-2 gap-3">
-        ${PERIODS.map(
+        ${periods.map(
           (period) => `
           <div>
             <label class="label" for="rate-${floor}-${period.key}">${period.label}</label>
@@ -49,7 +50,7 @@ function rateCard(floor, rates) {
           </div>`,
         ).join('')}
       </div>
-      <p class="hint mt-3">Tarif paket bulanan adalah total untuk seluruh periode, bukan per bulan.</p>
+      <p class="hint mt-3">${isVip ? 'Lantai 1 hanya menawarkan tarif harian. Tarif periode lain tidak dipakai.' : 'Tarif paket bulanan adalah total untuk seluruh periode, bukan per bulan. Kosongkan tarif yang tidak ditawarkan.'}</p>
     </div>
   `;
 }
@@ -62,6 +63,7 @@ function promoTypeBadge(promo) {
 
 export function render(root) {
   const promos = getPromos();
+  const rates1 = getRates('1');
   const rates2 = getRates('2');
   const rates3 = getRates('3');
 
@@ -74,7 +76,8 @@ export function render(root) {
         actions: `<button type="button" class="btn-primary btn-sm" data-action="add-promo">${icon('Plus', 'w-4 h-4')} Tambah Promo</button>`,
       })}
 
-      <div class="grid lg:grid-cols-2 gap-5 mb-6">
+      <div class="grid lg:grid-cols-3 gap-5 mb-6">
+        ${rateCard('1', rates1, PERIODS.filter((period) => period.key === 'harian'))}
         ${rateCard('2', rates2)}
         ${rateCard('3', rates3)}
       </div>

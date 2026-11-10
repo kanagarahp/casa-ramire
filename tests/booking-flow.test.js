@@ -138,7 +138,7 @@ test('catalog publishes gallery, promo codes, and availability without local pho
   const local = buildCatalogSnapshot({ includeLocalPhotos: true });
   assert.equal(local.gallery.length, 1);
   assert.equal(local.gallery[0].url.startsWith('data:image/'), true);
-  assert.equal(local.availability.total, 42);
+  assert.equal(local.availability.total, 43);
   assert.ok(local.promos.some((promo) => promo.code === 'MAHASISWA5'));
 
   const published = buildCatalogSnapshot();

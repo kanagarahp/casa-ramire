@@ -14,7 +14,11 @@ server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
 | --- | --- |
 | **Landing Page** | Galeri foto properti (bukan katalog per kamar), jumlah & nomor kamar yang masih tersedia, pricelist per lantai, fasilitas, titik Google Maps, dan **booking online** |
 | **POS / Kasir** | Penjualan layanan (laundry, kebersihan, dll.) untuk **penghuni atau non tenant**, keranjang, diskon, bayar sekarang atau **invoice/tunggakan**, kirim email, struk cetak, riwayat transaksi; master produk & harga dikelola owner |
-| **Booking Online** | Permintaan booking dari landing page: nama, WhatsApp, email, durasi, tanggal, kontak darurat, opsi bawa mobil (+Rp130.000/bln), kamar pilihan, dan kode promo |
+| **Booking Online** | Permintaan booking dari landing page: nama, WhatsApp, email, durasi, tanggal, kontak darurat, opsi bawa mobil (+Rp130.000/bln), kamar pilihan, dan kode promo. Permintaan otomatis dikirim ke email admin. |
+| **Booking Harian** | Kamar 101 Deluxe VIP lantai 1 khusus harian + kamar bulanan kosong lantai 2/3 yang bisa dipakai harian. Owner dapat mengatur ketersediaan harian per kamar. |
+| **Pindah Kamar** | Pindahkan booking (sebelum check-in) atau penghuni aktif ke kamar lain tanpa menghapus data. Harga dihitung ulang mengikuti kamar tujuan. |
+| **Parkir Mobil** | Kapasitas maksimal 15 mobil (bisa diubah owner). Booking online diblokir saat penuh; admin/owner masih bisa menambahkan dengan peringatan overbook. |
+| **Notifikasi Email** | Booking online, tagihan POS/manual, pengingat H-7 otomatis, serta konfirmasi pembayaran/DP dikirim ke email penghuni dan inbox admin `casaramirejogja@gmail.com`. |
 | **Dashboard** | KPI okupansi, antrean check-in, **Akan Berakhir** (≤ 7 hari), **Menunggak** (tagihan lewat jatuh tempo + lama tunggakan), arus kas 6 bulan, okupansi per lantai, tagihan aktif |
 | **Galeri Landing** | Unggah, ganti, hapus, dan urutkan foto galeri landing page; publikasi otomatis ke CDN foto katalog |
 | **Status Kamar** | 42 kamar (201–221, 301–321), filter lantai/status, pencarian, tampilan grid/daftar, tambah/hapus kamar, unggah foto kamar |

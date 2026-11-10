@@ -11,25 +11,46 @@ import {
 } from './constants.js';
 import { hashPassword } from './crypto.js';
 
-/** 21 rooms per floor: 201–221 and 301–321. */
+/** 1 VIP room on floor 1 + 21 rooms per floor on floors 2–3. */
 export function generateRooms() {
   const rooms = [];
   let id = 1;
+
   for (const floor of ['2', '3']) {
     for (let index = 1; index <= 21; index += 1) {
       rooms.push({
         id,
         nomor: `${floor}${String(index).padStart(2, '0')}`,
         lantai: floor,
+        tipe: 'Deluxe',
         status: 'kosong',
         tenantId: null,
         booking: null,
         photo: '',
         photoUrl: '',
+        // Kamar bulanan yang sedang kosong boleh dipakai untuk tamu harian.
+        dailyEnabled: true,
+        monthlyEnabled: true,
       });
       id += 1;
     }
   }
+
+  // Lantai 1: satu kamar Deluxe VIP yang dikhususkan untuk sewa harian.
+  // Appended so existing room IDs stay stable for saved data and tests.
+  rooms.push({
+    id,
+    nomor: '101',
+    lantai: '1',
+    tipe: 'Deluxe VIP',
+    status: 'kosong',
+    tenantId: null,
+    booking: null,
+    photo: '',
+    photoUrl: '',
+    dailyEnabled: true,
+    monthlyEnabled: false,
+  });
   return rooms;
 }
 

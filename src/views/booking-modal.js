@@ -17,13 +17,17 @@ import {
   getRooms,
   getTenant,
   markRenewalPending,
+  moveBooking,
   moveTenant,
   saveBooking,
 } from '../services/property.js';
 import { getDepositAccount, refundDeposit } from '../services/deposit.js';
 import { createRenewalPaymentLink, openPaymentLinkModal } from '../services/payments.js';
-import { computeQuote, getDepositDefault, getPromo, getPromos } from '../services/pricing.js';
+import { computeQuote, getDepositDefault, getPromo, getPromos, hasCarAddon } from '../services/pricing.js';
+import { getCarParkingStatus } from '../services/parking.js';
 import { isDokuEnabled } from '../services/settings.js';
+import { periodsForRoom, roomType } from '../services/daily.js';
+import { notifyBookingSaved } from '../services/notifications.js';
 import { esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { openModal } from '../ui/modal.js';
@@ -42,11 +46,17 @@ function promoOptionsHtml(selectedId) {
   ].join('');
 }
 
-function addonOptionsHtml() {
+function addonOptionsHtml(room = null) {
   const addons = getAddons({ activeOnly: true });
+  const parking = getCarParkingStatus({ excludeRoomId: room?.id });
   return [
     `<option value="">— Pilih layanan add-on —</option>`,
-    ...addons.map((addon) => `<option value="${addon.id}">${esc(addon.name)} — ${rupiah(addon.price)}/bln</option>`),
+    ...addons.map((addon) => {
+      const parkingNote = hasCarAddon([addon])
+        ? ` (${parking.used}/${parking.capacity}${parking.full ? ' — PENUH' : ''})`
+        : '';
+      return `<option value="${addon.id}">${esc(addon.name)} — ${rupiah(addon.price)}/bln${parkingNote}</option>`;
+    }),
   ].join('');
 }
 
@@ -126,6 +136,8 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
   const booking = room.booking;
   const meta = MODE_META[mode] || MODE_META.booking;
   const isExtend = mode === 'extend';
+  const allowedPeriods = isExtend ? periodsForRoom(room) : periodsForRoom(room);
+  const parking = getCarParkingStatus({ excludeRoomId: room.id });
 
   if (isExtend && !tenant) {
     toast('Data penghuni tidak ditemukan.', 'error');
@@ -139,7 +151,12 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
   const initialStart = isExtend
     ? addDays(tenant.endDate, 1)
     : booking?.startDate || todayISO();
-  const initialPeriode = isExtend ? tenant.periode || '1' : booking?.periode || '1';
+  const preferredPeriode = isExtend ? tenant.periode || '1' : booking?.periode || '';
+  const initialPeriode = allowedPeriods.includes(String(preferredPeriode))
+    ? String(preferredPeriode)
+    : String(room.lantai) === '1'
+      ? 'harian'
+      : allowedPeriods[0] || '1';
   const initialEnd = isExtend
     ? '-'
     : booking?.endDate || (isShortPeriod(initialPeriode)
@@ -201,7 +218,9 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
         <div>
           <label class="label" for="bm-periode">Skema periode</label>
           <select id="bm-periode" class="select">
-            ${PERIODS.map((period) => `<option value="${period.key}" ${period.key === initialPeriode ? 'selected' : ''}>${period.label}</option>`).join('')}
+            ${PERIODS.filter((period) => allowedPeriods.includes(period.key))
+              .map((period) => `<option value="${period.key}" ${period.key === initialPeriode ? 'selected' : ''}>${period.label}</option>`)
+              .join('')}
           </select>
         </div>
         <div>
@@ -240,10 +259,17 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
           <span class="badge-gold">Opsional</span>
         </div>
         <div class="flex gap-2">
-          <select id="bm-addon-select" class="select input-sm flex-1">${addonOptionsHtml()}</select>
+          <select id="bm-addon-select" class="select input-sm flex-1">${addonOptionsHtml(room)}</select>
           <button type="button" class="btn-primary btn-sm shrink-0" data-add-addon>${icon('Plus', 'w-4 h-4')} Tambah</button>
         </div>
         <div id="bm-addon-list" class="space-y-2">${addonListHtml(initialAddons)}</div>
+        ${
+          parking.full
+            ? `<div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[11px] text-rose-800 leading-relaxed">
+                <b>Parkir mobil penuh (${parking.used}/${parking.capacity}).</b> Anda tetap dapat menambahkan parkir sebagai admin/owner (overbook), tetapi tamu online tidak bisa memilih parkir mobil.
+              </div>`
+            : `<p class="text-[10px] text-stone-500">Kapasitas parkir mobil: ${parking.used}/${parking.capacity} terpakai.</p>`
+        }
       </div>
 
       <div class="grid sm:grid-cols-2 gap-4">
@@ -296,7 +322,7 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
   `;
 
   openModal({
-    title: `${meta.title} — Kamar ${room.nomor}`,
+    title: `${meta.title} — Kamar ${room.nomor} (${roomType(room)})`,
     subtitle: isExtend ? 'Perpanjang masa sewa penghuni aktif.' : 'Lengkapi data untuk menghitung total otomatis.',
     size: 'xl',
     body,
@@ -416,6 +442,15 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
           toast('Add-on ini sudah ditambahkan.', 'warning');
           return;
         }
+        if (hasCarAddon([addon])) {
+          const status = getCarParkingStatus({ excludeRoomId: room.id });
+          if (status.full) {
+            toast(
+              `Peringatan: parkir mobil penuh (${status.used}/${status.capacity}). Penambahan ini dicatat sebagai overbook oleh admin.`,
+              'warning',
+            );
+          }
+        }
         addons.push({ id: addon.id, name: addon.name, price: addon.price });
         select.value = '';
         rerenderAddons();
@@ -504,11 +539,28 @@ export function openBookingModal(roomId, mode = 'booking', tenantId = null) {
 
         try {
           if (mode === 'booking' || mode === 'edit_booking') {
-            saveBooking(room.id, payload);
+            const savedRoom = saveBooking(room.id, payload);
             toast(`Booking kamar ${room.nomor} berhasil disimpan.`);
+            void notifyBookingSaved({
+              room: savedRoom,
+              booking: savedRoom.booking,
+              email: payload.email,
+              isNew: mode === 'booking',
+            });
           } else if (mode === 'checkin') {
-            checkInDirect(room.id, payload);
+            const tenantRecord = checkInDirect(room.id, payload);
             toast(`${payload.name} berhasil check-in di kamar ${room.nomor}.`);
+            void notifyBookingSaved({
+              room: getRoom(room.id),
+              booking: {
+                ...payload,
+                grandTotal: tenantRecord.contractTotal,
+                depositPaid: tenantRecord.depositPaid,
+              },
+              email: payload.email,
+              isNew: true,
+              kind: 'checkin',
+            });
           } else if (mode === 'extend') {
             extendContract(tenant.id, payload);
             toast(`Kontrak ${tenant.name} berhasil diperpanjang.`);
@@ -690,8 +742,14 @@ export function openCheckoutModal(tenantId) {
 export function openMoveRoomModal(tenantId) {
   const tenant = getTenant(tenantId);
   if (!tenant) return;
+  const tenantPeriode = String(tenant.periode || '1');
   const available = getRooms()
-    .filter((room) => room.status === 'kosong' && room.id !== tenant.roomId)
+    .filter(
+      (room) =>
+        room.status === 'kosong' &&
+        room.id !== tenant.roomId &&
+        periodsForRoom(room).includes(tenantPeriode),
+    )
     .sort((a, b) => a.nomor.localeCompare(b.nomor, undefined, { numeric: true }));
 
   openModal({
@@ -730,6 +788,76 @@ export function openMoveRoomModal(tenantId) {
         try {
           const moved = moveTenant(tenant.id, roomId, date);
           toast(`${tenant.name} dipindahkan ke kamar ${moved.roomNumber}.`);
+          close();
+        } catch (error) {
+          toast(error.message, 'error');
+        }
+      });
+    },
+  });
+}
+
+/** Move a booking (pre-check-in) to another vacant room. */
+export function openMoveBookingModal(roomId) {
+  const source = getRoom(roomId);
+  const booking = source?.booking;
+  if (!source || !booking) {
+    toast('Booking tidak ditemukan.', 'error');
+    return;
+  }
+
+  const available = getRooms()
+    .filter(
+      (room) =>
+        String(room.id) !== String(source.id) &&
+        room.status === 'kosong' &&
+        periodsForRoom(room).includes(String(booking.periode)),
+    )
+    .sort((a, b) => a.nomor.localeCompare(b.nomor, undefined, { numeric: true }));
+
+  openModal({
+    title: 'Pindah Kamar Booking',
+    subtitle: `${booking.name} • sekarang di kamar ${source.nomor}`,
+    size: 'md',
+    body: `
+      <div class="space-y-4">
+        <div class="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-3.5 text-xs text-indigo-900">
+          Booking tetap tersimpan. Data tamu, promo, add-on, dan riwayat deposit ikut pindah. Harga dihitung ulang mengikuti tarif kamar tujuan.
+        </div>
+        ${
+          available.length
+            ? `
+            <div>
+              <label class="label" for="mb-room">Kamar tujuan</label>
+              <select id="mb-room" class="select">
+                ${available
+                  .map(
+                    (room) =>
+                      `<option value="${room.id}">Kamar ${esc(room.nomor)} — Lantai ${esc(room.lantai)} · ${esc(roomType(room))}</option>`,
+                  )
+                  .join('')}
+              </select>
+            </div>
+            <p class="hint">Riwayat perpindahan booking akan dicatat pada data booking.</p>
+          `
+            : `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Tidak ada kamar kosong yang mendukung durasi ${esc(booking.periode)} saat ini.</div>`
+        }
+      </div>
+    `,
+    footer: `
+      <button type="button" class="btn-outline btn-sm" data-modal-close>Batal</button>
+      ${
+        available.length
+          ? `<button type="button" class="btn-primary btn-sm" data-move-booking>${icon('Repeat', 'w-4 h-4')} Pindahkan booking</button>`
+          : ''
+      }
+    `,
+    onMount(el, close) {
+      el.querySelector('[data-move-booking]')?.addEventListener('click', () => {
+        const targetId = el.querySelector('#mb-room').value;
+        try {
+          const moved = moveBooking(source.id, targetId);
+          toast(`Booking ${moved.booking?.name || booking.name} dipindahkan ke kamar ${moved.nomor}.`);
           close();
         } catch (error) {
           toast(error.message, 'error');

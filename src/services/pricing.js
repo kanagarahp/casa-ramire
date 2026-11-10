@@ -1,4 +1,5 @@
 import { CAR_ADDON_NAME, CAR_FEE, PERIODS } from '../core/constants.js';
+import { getCarDailyFee } from './settings.js';
 import {
   addDays,
   addMonths,
@@ -11,7 +12,10 @@ import { nextId } from '../core/id.js';
 import { getState, update } from '../core/store.js';
 
 export function priceKeyForFloor(lantai) {
-  return String(lantai) === '3' ? 'lantai3' : 'lantai2';
+  const floor = String(lantai);
+  if (floor === '1') return 'lantai1';
+  if (floor === '3') return 'lantai3';
+  return 'lantai2';
 }
 
 export function getRates(lantai) {
@@ -103,7 +107,12 @@ export function computeQuote({
   const discount = Math.min(base, Math.max(0, Math.round(grossDiscount)));
 
   const addonMonthly = (addons || []).reduce((sum, addon) => sum + toNumber(addon.price), 0);
-  const addonTotal = period.kind === 'months' ? addonMonthly * period.months : addonMonthly;
+  const carAddons = (addons || []).filter((addon) => hasCarAddon([addon]));
+  const carAddonMonthly = carAddons.reduce((sum, addon) => sum + toNumber(addon.price), 0);
+  const otherAddonMonthly = Math.max(0, addonMonthly - carAddonMonthly);
+  const carTotal = carAddons.length ? getCarDailyFee() * units : 0;
+  const addonTotal =
+    period.kind === 'months' ? addonMonthly * period.months : otherAddonMonthly + carTotal;
 
   const rentTotal = Math.max(0, base - discount);
   const grandTotal = rentTotal + addonTotal;
@@ -299,8 +308,20 @@ export function savePricing(lantai, rates) {
 
   for (const periode of PERIODS.map((item) => item.key)) {
     const value = toNumber(rates?.[periode]);
-    if (value <= 0) throw new Error('Semua tarif harus lebih dari 0.');
+    if (value < 0) throw new Error('Tarif tidak boleh negatif.');
     next[periode] = value;
+  }
+
+  if (String(lantai) === '1') {
+    if (toNumber(next.harian) <= 0) {
+      throw new Error('Tarif harian kamar Deluxe VIP lantai 1 wajib diisi.');
+    }
+    // Lantai 1 dikhususkan untuk sewa harian.
+    for (const periode of PERIODS.filter((item) => item.key !== 'harian')) {
+      next[periode.key] = 0;
+    }
+  } else if (!PERIODS.some((periode) => toNumber(next[periode.key]) > 0)) {
+    throw new Error('Isi minimal satu tarif untuk lantai ini.');
   }
 
   update((draft) => {

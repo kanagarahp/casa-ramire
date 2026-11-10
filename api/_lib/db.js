@@ -125,6 +125,33 @@ export async function ensureCatalogSchema() {
         )
       `);
       await query(`
+        create table if not exists casa_password_resets (
+          id text primary key,
+          username text not null,
+          code_hash text not null,
+          expires_at timestamptz not null,
+          attempts integer not null default 0,
+          used_at timestamptz,
+          created_at timestamptz not null default now()
+        )
+      `);
+      await query(`
+        create index if not exists casa_password_resets_username_idx
+          on casa_password_resets (username, created_at desc)
+      `);
+      await query(`
+        create table if not exists casa_billing_reminders (
+          id text primary key,
+          kind text not null,
+          record_id text not null,
+          due_date date,
+          recipient text,
+          status text not null default 'sent',
+          error text,
+          sent_at timestamptz not null default now()
+        )
+      `);
+      await query(`
         create index if not exists casa_bookings_status_idx
           on casa_bookings (status, created_at)
       `);

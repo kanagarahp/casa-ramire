@@ -1,4 +1,4 @@
-import { login, resetPasswordWithRecoveryKey } from '../services/auth.js';
+import { confirmOwnerResetCode, login, requestOwnerResetCode } from '../services/auth.js';
 import { toast } from '../ui/toast.js';
 import { brandMark } from '../ui/brand.js';
 import { icon } from '../ui/icons.js';
@@ -173,39 +173,44 @@ export function bindLogin(root) {
 
 function openResetPasswordModal(defaultUsername, onDone) {
   openModal({
-    title: 'Reset Password Owner',
-    subtitle: 'Pulihkan akses owner dengan kunci admin Casa Ramire.',
+    title: 'Lupa Password Owner',
+    subtitle: 'Kode verifikasi dikirim ke email default Casa Ramire.',
     size: 'md',
     body: `
       <form id="reset-password-form" class="space-y-4" novalidate>
         <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 leading-relaxed flex items-start gap-2">
           ${icon('Info', 'w-4 h-4 shrink-0 mt-0.5')}
           <span>
-            Reset hanya berlaku di <b>browser/perangkat ini</b>. Masukkan kunci admin yang dipakai untuk sinkronisasi/pembayaran.
-            Nilainya ada di file <code class="font-mono text-[10px] bg-white/70 border border-amber-200 rounded px-1 py-0.5">.env.catalog</code>.
+            Kode reset hanya dikirim ke <b>casaramirejogja@gmail.com</b>. Fitur ini khusus akun <b>owner</b>.
+            Password admin/staf hanya dapat direset oleh owner dari menu Manajemen Akun.
           </span>
         </div>
 
-        <div>
-          <label class="label" for="rp-username">Username owner</label>
-          <input id="rp-username" type="text" class="input" value="${esc(defaultUsername || 'owner')}" autocomplete="username" required />
+        <div id="rp-step-1" class="space-y-3">
+          <div>
+            <label class="label" for="rp-username">Username owner</label>
+            <input id="rp-username" type="text" class="input" value="${esc(defaultUsername || 'owner')}" autocomplete="username" required />
+          </div>
+          <p class="hint">Klik Kirim Kode, lalu cek inbox/spam email owner.</p>
         </div>
 
-        <div class="grid sm:grid-cols-2 gap-3">
+        <div id="rp-step-2" class="hidden space-y-3">
+          <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[11px] text-emerald-900" data-rp-sent></div>
           <div>
-            <label class="label" for="rp-new">Password baru</label>
-            <input id="rp-new" type="password" class="input" placeholder="Minimal 6 karakter" autocomplete="new-password" required />
+            <label class="label" for="rp-code">Kode verifikasi (6 digit)</label>
+            <input id="rp-code" type="text" inputmode="numeric" maxlength="6" class="input font-mono tracking-[0.3em] text-center text-lg" placeholder="000000" autocomplete="one-time-code" />
           </div>
-          <div>
-            <label class="label" for="rp-confirm">Konfirmasi password</label>
-            <input id="rp-confirm" type="password" class="input" autocomplete="new-password" required />
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label class="label" for="rp-new">Password baru</label>
+              <input id="rp-new" type="password" class="input" placeholder="Minimal 6 karakter" autocomplete="new-password" />
+            </div>
+            <div>
+              <label class="label" for="rp-confirm">Konfirmasi password</label>
+              <input id="rp-confirm" type="password" class="input" autocomplete="new-password" />
+            </div>
           </div>
-        </div>
-
-        <div>
-          <label class="label" for="rp-key">Kunci admin</label>
-          <input id="rp-key" type="password" class="input font-mono text-xs" placeholder="casa_..." autocomplete="off" required />
-          <p class="hint mt-1">Kunci ini tidak dikirim ke pihak lain. Verifikasi dilakukan ke server Casa Ramire atau kunci yang tersimpan di perangkat ini.</p>
+          <p class="hint">Kode berlaku 15 menit dan hanya bisa dipakai sekali.</p>
         </div>
 
         <div id="rp-error" class="hidden items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700">
@@ -216,61 +221,80 @@ function openResetPasswordModal(defaultUsername, onDone) {
     `,
     footer: `
       <button type="button" class="btn-outline btn-sm" data-modal-close>Batal</button>
-      <button type="submit" form="reset-password-form" class="btn-primary btn-sm" data-reset-submit>
-        ${icon('KeyRound', 'w-4 h-4')} Reset password
-      </button>
+      <button type="button" class="btn-primary btn-sm" data-send-code>${icon('Send', 'w-4 h-4')} Kirim kode</button>
+      <button type="button" class="btn-primary btn-sm hidden" data-reset-submit>${icon('KeyRound', 'w-4 h-4')} Simpan password baru</button>
     `,
     onMount(el, close) {
       const form = el.querySelector('#reset-password-form');
       const errorBox = el.querySelector('#rp-error');
       const errorText = el.querySelector('[data-rp-error]');
-      const submit = el.querySelector('[data-reset-submit]');
+      const sendButton = el.querySelector('[data-send-code]');
+      const resetButton = el.querySelector('[data-reset-submit]');
+      const step1 = el.querySelector('#rp-step-1');
+      const step2 = el.querySelector('#rp-step-2');
+      const sentInfo = el.querySelector('[data-rp-sent]');
+      const usernameInput = el.querySelector('#rp-username');
 
       const showError = (message) => {
         errorText.textContent = message;
         errorBox.classList.remove('hidden');
         errorBox.classList.add('flex');
       };
-
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
+      const clearError = () => {
         errorBox.classList.add('hidden');
         errorBox.classList.remove('flex');
+      };
 
-        const username = el.querySelector('#rp-username').value.trim();
-        const newPassword = el.querySelector('#rp-new').value;
-        const confirmation = el.querySelector('#rp-confirm').value;
-        const recoveryKey = el.querySelector('#rp-key').value.trim();
-
+      sendButton.addEventListener('click', async () => {
+        clearError();
+        const username = usernameInput.value.trim();
         if (!username) {
           showError('Username owner wajib diisi.');
           return;
         }
-        if (newPassword.length < 6) {
-          showError('Password baru minimal 6 karakter.');
-          return;
-        }
-        if (newPassword !== confirmation) {
-          showError('Konfirmasi password tidak cocok.');
-          return;
-        }
-        if (!recoveryKey) {
-          showError('Kunci admin wajib diisi.');
-          return;
-        }
-
-        setBusy(submit, true, 'Memverifikasi…');
+        setBusy(sendButton, true, 'Mengirim kode…');
         try {
-          await resetPasswordWithRecoveryKey({ username, newPassword, recoveryKey });
+          const result = await requestOwnerResetCode(username);
+          step1.classList.add('hidden');
+          step2.classList.remove('hidden');
+          sendButton.classList.add('hidden');
+          resetButton.classList.remove('hidden');
+          sentInfo.textContent = result.message || 'Kode reset sudah dikirim ke email owner.';
+          toast('Kode reset dikirim ke email owner.');
+          el.querySelector('#rp-code')?.focus();
+        } catch (error) {
+          showError(error.message || 'Gagal mengirim kode reset.');
+        } finally {
+          setBusy(sendButton, false);
+        }
+      });
+
+      resetButton.addEventListener('click', async () => {
+        clearError();
+        const username = usernameInput.value.trim();
+        const code = el.querySelector('#rp-code').value.replace(/\D/g, '');
+        const newPassword = el.querySelector('#rp-new').value;
+        const confirmation = el.querySelector('#rp-confirm').value;
+
+        if (!username) return showError('Username owner wajib diisi.');
+        if (code.length !== 6) return showError('Kode verifikasi harus 6 digit.');
+        if (newPassword.length < 6) return showError('Password baru minimal 6 karakter.');
+        if (newPassword !== confirmation) return showError('Konfirmasi password tidak cocok.');
+
+        setBusy(resetButton, true, 'Menyimpan…');
+        try {
+          await confirmOwnerResetCode({ username, code, newPassword });
           toast('Password owner berhasil direset. Silakan masuk dengan password baru.');
           close();
           onDone?.(username);
         } catch (error) {
           showError(error.message || 'Gagal mereset password.');
         } finally {
-          setBusy(submit, false);
+          setBusy(resetButton, false);
         }
       });
+
+      form.addEventListener('submit', (event) => event.preventDefault());
     },
   });
 }

@@ -167,7 +167,7 @@ test('public catalog snapshot never exposes private admin or tenant data', () =>
   const serialized = JSON.stringify(snapshot);
 
   assert.equal(snapshot.property.whatsapp, '081234567890');
-  assert.equal(snapshot.rooms.length, 42);
+  assert.equal(snapshot.rooms.length, 43);
   assert.equal(serialized.includes('super-secret-key'), false);
   assert.equal(serialized.includes('Vallerie'), false);
   assert.equal(serialized.includes('081234567890'), true); // admin WA is intentionally public

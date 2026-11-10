@@ -1,5 +1,5 @@
 import { formatDate, rupiah } from '../core/format.js';
-import { getSettings } from './settings.js';
+import { getNotificationEmail, getSettings } from './settings.js';
 
 function adminKey() {
   return String(getSettings().catalogAdminKey || '').trim();
@@ -135,18 +135,30 @@ export const buildPaymentEmail = buildBillingEmail;
  * configured yet, fall back to the device's default mail client so the bill is
  * never lost.
  */
-export async function sendBillingEmail(payload) {
+export async function sendBillingEmail(payload, { fallbackToMailto = true, copyToAdmin = true } = {}) {
   const { subject, text } = buildBillingEmail(payload);
+  const recipient = String(payload.to || '').trim().toLowerCase();
+  const admin = getNotificationEmail().toLowerCase();
+
   try {
     await sendEmail({ to: payload.to, subject, text });
-    return { sent: true, fallback: false };
   } catch (error) {
-    if (error.code === 'EMAIL_NOT_CONFIGURED') {
+    if (error.code === 'EMAIL_NOT_CONFIGURED' && fallbackToMailto) {
       openMailto(payload.to, subject, text);
       return { sent: false, fallback: true, error };
     }
     throw error;
   }
+
+  // Keep a copy in the owner inbox so bills sent from POS/manual invoices are
+  // auditable even when the staff device closes the browser.
+  if (copyToAdmin && admin && admin !== recipient) {
+    sendEmail({ to: admin, subject: `[Salinan Admin] ${subject}`, text }).catch((error) => {
+      console.warn('[email] gagal mengirim salinan admin', error.message);
+    });
+  }
+
+  return { sent: true, fallback: false };
 }
 
 export const sendPaymentEmail = sendBillingEmail;

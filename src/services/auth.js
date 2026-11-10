@@ -223,6 +223,90 @@ export async function resetPasswordWithRecoveryKey({ username, newPassword, reco
   return getState().users.find((item) => item.username.toLowerCase() === normalized);
 }
 
+/**
+ * Owner password recovery by email code. The code is always sent to the
+ * configured owner inbox; staff accounts cannot use this flow.
+ */
+export async function requestOwnerResetCode(username) {
+  const normalized = String(username || '').trim().toLowerCase();
+  if (!normalized) throw new Error('Username owner wajib diisi.');
+
+  const user = getState().users.find(
+    (item) => String(item.username).toLowerCase() === normalized,
+  );
+  if (!user) throw new Error('Username owner tidak ditemukan di perangkat ini.');
+  if (user.role !== 'owner') {
+    throw new Error('Reset mandiri hanya untuk akun owner. Password admin/staf hanya dapat direset oleh owner.');
+  }
+
+  let response;
+  try {
+    response = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: normalized }),
+    });
+  } catch {
+    throw new Error('Layanan email tidak dapat dihubungi. Coba lagi beberapa saat lagi.');
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  const result = contentType.includes('application/json')
+    ? await response.json().catch(() => ({}))
+    : {};
+  if (!response.ok) {
+    throw new Error(String(result.error || 'Gagal mengirim kode reset password.'));
+  }
+  return result;
+}
+
+export async function confirmOwnerResetCode({ username, code, newPassword }) {
+  const normalized = String(username || '').trim().toLowerCase();
+  const cleanCode = String(code || '').replace(/\D/g, '');
+  if (!normalized) throw new Error('Username owner wajib diisi.');
+  if (cleanCode.length !== 6) throw new Error('Kode verifikasi harus 6 digit.');
+  validatePassword(newPassword);
+
+  const state = getState();
+  const user = state.users.find(
+    (item) => String(item.username).toLowerCase() === normalized,
+  );
+  if (!user) throw new Error('Username owner tidak ditemukan di perangkat ini.');
+  if (user.role !== 'owner') {
+    throw new Error('Password admin/staf hanya dapat direset oleh owner.');
+  }
+
+  let response;
+  try {
+    response = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: normalized, code: cleanCode, newPassword }),
+    });
+  } catch {
+    throw new Error('Layanan reset password tidak dapat dihubungi.');
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  const result = contentType.includes('application/json')
+    ? await response.json().catch(() => ({}))
+    : {};
+  if (!response.ok) throw new Error(String(result.error || 'Kode reset tidak valid.'));
+
+  update((draft) => {
+    const target = draft.users.find(
+      (item) => String(item.username).toLowerCase() === normalized,
+    );
+    if (!target) throw new Error('Akun owner tidak ditemukan.');
+    target.passHash = hashPassword(newPassword);
+    target.updatedAt = new Date().toISOString();
+  });
+
+  return getState().users.find(
+    (item) => String(item.username).toLowerCase() === normalized,
+  );
+}
+
 export function changeOwnPassword(currentPassword, newPassword) {
   const user = getActiveUser();
   if (!user) throw new Error('Sesi tidak valid.');

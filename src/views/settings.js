@@ -7,6 +7,8 @@ import {
 } from '../core/store.js';
 import { changeOwnPassword, getActiveUser, isOwner } from '../services/auth.js';
 import { publishCatalog } from '../services/catalog.js';
+import { sendEmail } from '../services/email.js';
+import { runBillingReminders } from '../services/reminders.js';
 import { updateSettings } from '../services/settings.js';
 import { syncNow } from '../services/sync.js';
 import { confirmAction, openModal } from '../ui/modal.js';
@@ -173,6 +175,23 @@ export function openSettingsModal() {
           body: `
             <form id="settings-payment-form" class="space-y-3">
               <div>
+                <label class="label" for="set-notification-email">Email notifikasi admin</label>
+                <input id="set-notification-email" type="email" class="input" value="${esc(settings.notificationEmail || 'casaramirejogja@gmail.com')}" placeholder="casaramirejogja@gmail.com" />
+                <p class="hint mt-1">Booking online, tagihan H-7, konfirmasi pembayaran/DP, dan kode reset password owner dikirim ke email ini.</p>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="label" for="set-parking-capacity">Kapasitas parkir mobil</label>
+                  <input id="set-parking-capacity" type="number" min="1" step="1" class="input" value="${Number(settings.parkingCapacity) || 15}" />
+                  <p class="hint mt-1">Maksimal mobil. Booking online otomatis diblokir jika penuh.</p>
+                </div>
+                <div>
+                  <label class="label" for="set-car-daily">Tarif parkir harian (Rp/hari)</label>
+                  <input id="set-car-daily" type="number" min="0" step="1000" class="input" value="${Number(settings.carDailyFee) || 10000}" />
+                  <p class="hint mt-1">Dipakai untuk booking harian/mingguan.</p>
+                </div>
+              </div>
+              <div>
                 <label class="label" for="set-payment-instructions">Instruksi pembayaran di email</label>
                 <textarea id="set-payment-instructions" rows="3" class="input" placeholder="cth: Transfer BCA 1234567890 a.n. Casa Ramire, lalu kirim bukti ke WhatsApp admin.">${esc(settings.paymentInstructions || '')}</textarea>
                 <p class="hint mt-1">Dikirim bersama tagihan. Jika kosong, email memakai instruksi umum (transfer bank/QRIS dan konfirmasi ke admin).</p>
@@ -184,7 +203,12 @@ export function openSettingsModal() {
                   <span class="block text-[11px] text-stone-600 mt-0.5">Biarkan nonaktif selama akun/channel DOKU belum siap. Tagihan tetap bisa dikirim lewat email.</span>
                 </span>
               </label>
-              <button type="submit" class="btn-primary btn-sm">${icon('Save', 'w-4 h-4')} Simpan pengaturan pembayaran</button>
+              <div class="flex flex-wrap gap-2">
+                <button type="submit" class="btn-primary btn-sm">${icon('Save', 'w-4 h-4')} Simpan pengaturan</button>
+                <button type="button" class="btn-outline btn-sm" data-action="test-email">${icon('Send', 'w-4 h-4')} Kirim email tes</button>
+                <button type="button" class="btn-outline btn-sm" data-action="run-reminders">${icon('Clock', 'w-4 h-4')} Kirim pengingat H-7</button>
+              </div>
+              <p class="hint">Pengiriman email memerlukan <code class="font-mono">RESEND_API_KEY</code> dan <code class="font-mono">EMAIL_FROM</code> di environment Vercel. Pengingat H-7 juga berjalan otomatis lewat cron harian.</p>
             </form>
           `,
         })}
@@ -268,10 +292,55 @@ export function openSettingsModal() {
       paymentForm?.addEventListener('submit', (event) => {
         event.preventDefault();
         updateSettings({
+          notificationEmail: el.querySelector('#set-notification-email').value,
+          parkingCapacity: el.querySelector('#set-parking-capacity').value,
+          carDailyFee: el.querySelector('#set-car-daily').value,
           paymentInstructions: el.querySelector('#set-payment-instructions').value,
           dokuEnabled: el.querySelector('#set-doku-enabled').checked,
         });
         toast('Pengaturan pembayaran berhasil disimpan.');
+      });
+
+      el.querySelector('[data-action="test-email"]')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        const target = el.querySelector('#set-notification-email').value.trim();
+        setBusy(button, true, 'Mengirim…');
+        try {
+          await sendEmail({
+            to: target,
+            subject: 'Tes Email Casa Ramire',
+            text: [
+              'Ini adalah email tes dari aplikasi Casa Ramire.',
+              '',
+              `Waktu: ${new Date().toLocaleString('id-ID')}`,
+              'Jika email ini diterima, konfigurasi Resend sudah benar.',
+            ].join('\n'),
+          });
+          toast(`Email tes berhasil dikirim ke ${target}.`);
+        } catch (error) {
+          toast(`Email tes gagal: ${error.message}`, 'error');
+        } finally {
+          setBusy(button, false);
+        }
+      });
+
+      el.querySelector('[data-action="run-reminders"]')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        setBusy(button, true, 'Memproses…');
+        try {
+          const result = await runBillingReminders({ force: true, silent: true });
+          if (!result?.sent && result?.checked === 0) {
+            toast('Tidak ada tagihan yang jatuh tempo 7 hari lagi.', 'warning');
+          } else if (!result?.sent) {
+            toast(`Pengingat selesai. Terkirim: ${result?.sent || 0}, gagal: ${result?.failed || 0}.`, 'warning');
+          } else {
+            toast(`${result.sent} pengingat tagihan H-7 dikirim.`);
+          }
+        } catch (error) {
+          toast(error.message, 'error');
+        } finally {
+          setBusy(button, false);
+        }
       });
 
       el.querySelector('[data-action="publish-catalog"]')?.addEventListener('click', async (event) => {

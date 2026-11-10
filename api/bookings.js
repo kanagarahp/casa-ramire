@@ -2,12 +2,18 @@ import crypto from 'node:crypto';
 
 import { ensureCatalogSchema, query, withTransaction } from './_lib/db.js';
 import {
+  emailConfigured,
+  notificationEmail,
+  sendResendEmail,
+} from './_lib/email.js';
+import {
   asString,
   methodNotAllowed,
   readBody,
   requireAdmin,
   sendJson,
 } from './_lib/http.js';
+import { normalizePublicState } from './_lib/state-normalize.js';
 
 const PERIOD_KEYS = ['harian', 'mingguan', '1', '3', '6', '12'];
 const STATUSES = ['pending', 'confirmed', 'rejected'];
@@ -73,7 +79,7 @@ function validateBooking(body) {
       promoCode,
       roomId: body?.roomId ? asString(body.roomId, 40) : '',
       roomNumber: asString(body?.roomNumber, 10),
-      floor: ['2', '3'].includes(String(body?.floor)) ? String(body.floor) : '',
+      floor: ['1', '2', '3'].includes(String(body?.floor)) ? String(body.floor) : '',
       estimate: Number(body?.estimate) > 0 ? Math.round(Number(body.estimate)) : 0,
       emergencyContact: {
         name: asString(emergency.name, 120),
@@ -82,6 +88,117 @@ function validateBooking(body) {
       },
     },
   };
+}
+
+function hasCarAddon(addons = []) {
+  return (Array.isArray(addons) ? addons : []).some(
+    (addon) =>
+      String(addon?.id) === 'car-parking' ||
+      String(addon?.name || '').toLowerCase() === 'parkir mobil',
+  );
+}
+
+async function loadSharedState() {
+  const result = await query('select data from casa_state where id = $1 limit 1', ['public']);
+  if (!result.rows.length) return null;
+  const row = result.rows[0];
+  const state = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+  return normalizePublicState(state);
+}
+
+function parkingFromState(state) {
+  const capacity = Math.max(1, Math.floor(Number(state?.settings?.parkingCapacity)) || 15);
+  let used = 0;
+  for (const tenant of state?.tenants || []) {
+    if (tenant.status === 'aktif' && hasCarAddon(tenant.addons)) used += 1;
+  }
+  for (const room of state?.rooms || []) {
+    if (room.booking && hasCarAddon(room.booking.addons)) used += 1;
+  }
+  return { capacity, used, available: Math.max(0, capacity - used), full: used >= capacity };
+}
+
+function roomUnavailableMessage(state, data) {
+  if (!state || !data.roomId) return '';
+  const room = (state.rooms || []).find(
+    (item) => String(item.id) === String(data.roomId),
+  );
+  if (!room) return 'Kamar yang dipilih tidak ditemukan. Silakan pilih kamar lain.';
+  if (room.status !== 'kosong') {
+    return `Kamar ${room.nomor} sudah tidak tersedia. Silakan pilih kamar lain.`;
+  }
+  const short = data.periode === 'harian' || data.periode === 'mingguan';
+  if (short && room.dailyEnabled === false) {
+    return `Kamar ${room.nomor} tidak dibuka untuk sewa harian.`;
+  }
+  if (!short && room.monthlyEnabled === false) {
+    return `Kamar ${room.nomor} hanya untuk sewa harian, bukan bulanan.`;
+  }
+  return '';
+}
+
+function bookingEmailText({ code, data, admin = false }) {
+  const title = admin ? 'Booking Online Baru' : 'Booking Online Diterima';
+  return [
+    admin ? `Booking baru masuk dari landing page.` : `Halo ${data.name},`,
+    '',
+    `${title} — Casa Ramire`,
+    `Kode booking: ${code}`,
+    `Nama: ${data.name}`,
+    `WhatsApp: ${data.phone}`,
+    `Email: ${data.email}`,
+    `Durasi: ${data.periode}`,
+    `Mulai: ${data.startDate || '—'}`,
+    `Selesai: ${data.endDate || '—'}`,
+    `Lantai: ${data.floor || 'fleksibel'}`,
+    `Kamar: ${data.roomNumber || 'dipilih admin'}`,
+    `Mobil: ${data.car ? 'Ya' : 'Tidak'}`,
+    `Estimasi: Rp${Math.round(Number(data.estimate) || 0).toLocaleString('id-ID')}`,
+    data.notes ? `Catatan: ${data.notes}` : null,
+    '',
+    admin
+      ? 'Buka menu Booking Online di aplikasi untuk memproses permintaan ini.'
+      : 'Admin akan menghubungi Anda untuk konfirmasi ketersediaan kamar.',
+    '',
+    'Casa Ramire',
+  ]
+    .filter((line) => line !== null && line !== undefined)
+    .join('\n');
+}
+
+async function sendBookingEmails({ code, data }) {
+  if (!emailConfigured()) {
+    return { sent: false, reason: 'EMAIL_NOT_CONFIGURED' };
+  }
+
+  const jobs = [];
+  jobs.push(
+    sendResendEmail({
+      to: data.email,
+      subject: `Booking Online Diterima — ${code}`,
+      text: bookingEmailText({ code, data }),
+    }),
+  );
+  const admin = notificationEmail();
+  if (admin && admin !== data.email.toLowerCase()) {
+    jobs.push(
+      sendResendEmail({
+        to: admin,
+        subject: `Booking Online Baru — ${code}`,
+        text: bookingEmailText({ code, data, admin: true }),
+      }),
+    );
+  }
+
+  const results = await Promise.allSettled(jobs);
+  const sent = results.some((result) => result.status === 'fulfilled');
+  if (!sent) {
+    console.error(
+      '[bookings] email notifikasi gagal',
+      results.map((result) => result.reason?.message),
+    );
+  }
+  return { sent };
 }
 
 async function listRequests(status) {
@@ -179,6 +296,23 @@ export default async function handler(req, res) {
         });
       }
 
+      const sharedState = await loadSharedState().catch((error) => {
+        console.warn('[bookings] gagal membaca state untuk validasi', error.message);
+        return null;
+      });
+      const unavailable = roomUnavailableMessage(sharedState, data);
+      if (unavailable) {
+        return sendJson(res, 409, { error: unavailable, code: 'ROOM_UNAVAILABLE' });
+      }
+      const parking = parkingFromState(sharedState);
+      if (data.car && parking.full) {
+        return sendJson(res, 409, {
+          error: `Parkir mobil penuh (${parking.used}/${parking.capacity}). Silakan pilih tanpa mobil atau hubungi admin Casa Ramire.`,
+          code: 'PARKING_FULL',
+          parking,
+        });
+      }
+
       const result = await withTransaction(async (client) => {
         if (data.promoCode) {
           const promo = await client.query(
@@ -216,8 +350,18 @@ export default async function handler(req, res) {
       });
 
       void result;
+      const emailResult = await sendBookingEmails({ code, data }).catch((error) => {
+        console.error('[bookings] notifikasi email error', error);
+        return { sent: false, reason: error.message };
+      });
       return sendJson(res, 201, {
         ok: true,
+        emailSent: Boolean(emailResult.sent),
+        emailNote: emailResult.sent
+          ? ''
+          : emailResult.reason === 'EMAIL_NOT_CONFIGURED'
+            ? 'Email belum dikonfigurasi di server.'
+            : 'Booking tersimpan, tetapi email notifikasi gagal dikirim.',
         request: {
           id,
           code,

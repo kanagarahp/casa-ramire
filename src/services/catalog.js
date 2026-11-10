@@ -1,5 +1,6 @@
 import { getState, update } from '../core/store.js';
-import { getFacilities } from './settings.js';
+import { getCarParkingStatus } from './parking.js';
+import { getCarDailyFee, getFacilities, getParkingCapacity } from './settings.js';
 import { getRate, syncPromoUsage } from './pricing.js';
 
 const STATUS_LABEL = {
@@ -25,9 +26,16 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
   const available = rooms.filter((room) => room.status === 'kosong').length;
   const occupied = rooms.filter((room) => room.status === 'terisi').length;
   const booked = rooms.filter((room) => room.status === 'booking').length;
+  const dailyAvailable = rooms.filter(
+    (room) => room.status === 'kosong' && room.dailyEnabled !== false,
+  ).length;
+  const monthlyAvailable = rooms.filter(
+    (room) => room.status === 'kosong' && room.monthlyEnabled !== false,
+  ).length;
+  const parking = getCarParkingStatus();
 
   return {
-    version: 2,
+    version: 3,
     generatedAt: new Date().toISOString(),
     property: {
       name: String(settings.propertyName || 'Casa Ramire').trim(),
@@ -40,8 +48,11 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
       mapsEmbedUrl: String(settings.mapsEmbedUrl || '').trim(),
       facilities: getFacilities(),
       deposit: Number(settings.depositDefault) || 500000,
+      parkingCapacity: getParkingCapacity(),
+      carDailyFee: getCarDailyFee(),
     },
     pricing: {
+      lantai1: { ...(state.pricing?.lantai1 || {}) },
       lantai2: { ...(state.pricing?.lantai2 || {}) },
       lantai3: { ...(state.pricing?.lantai3 || {}) },
     },
@@ -50,7 +61,10 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
       available,
       occupied,
       booked,
+      dailyAvailable,
+      monthlyAvailable,
     },
+    parking,
     gallery: safeArray(state.gallery).map((item) => ({
       id: item.id,
       caption: String(item.caption || '').trim(),
@@ -70,8 +84,12 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
       id: room.id,
       nomor: room.nomor,
       lantai: room.lantai,
+      tipe: room.tipe || (String(room.lantai) === '1' ? 'Deluxe VIP' : 'Deluxe'),
       status: room.status,
       statusLabel: STATUS_LABEL[room.status] || 'Tersedia',
+      dailyEnabled: room.dailyEnabled !== false,
+      monthlyEnabled: room.monthlyEnabled !== false,
+      priceDaily: getRate(room.lantai, 'harian'),
       priceMonthly: getRate(room.lantai, '1'),
     })),
   };
@@ -239,6 +257,8 @@ export async function fetchLiveAvailability() {
     if (!payload?.exists || !payload.availability) return null;
     return {
       availability: payload.availability,
+      parking: payload.parking || null,
+      pricing: payload.pricing || null,
       rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
     };
   } catch {

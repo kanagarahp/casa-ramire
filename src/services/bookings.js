@@ -51,9 +51,23 @@ export async function submitBookingRequest(payload) {
   }
 
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw apiError(result, 'Gagal mengirim booking.');
+  if (!response.ok) {
+    // Do not lose a visitor's request when the server/database is temporarily
+    // unavailable. Keep it locally so the admin on this device can recover it.
+    if (response.status >= 500) {
+      const local = saveLocalBooking(payload, apiError(result, 'Server booking sedang bermasalah.'));
+      local.offlineReason = String(result.error || local.offlineReason || '');
+      return local;
+    }
+    throw apiError(result, 'Gagal mengirim booking.');
+  }
   if (!result?.request) throw new Error('Server tidak mengembalikan data booking.');
-  return { ...result.request, source: 'server' };
+  return {
+    ...result.request,
+    source: 'server',
+    emailSent: Boolean(result.emailSent),
+    emailNote: result.emailNote || '',
+  };
 }
 
 function saveLocalBooking(payload, cause) {

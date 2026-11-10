@@ -4,6 +4,7 @@ import { getState } from '../core/store.js';
 import { isOwner } from '../services/auth.js';
 import { sendInvoiceByEmail } from '../services/billing-notify.js';
 import { isValidEmail } from '../services/email.js';
+import { notifyPosPayment } from '../services/notifications.js';
 import {
   createPosSale,
   deletePosProduct,
@@ -1123,6 +1124,20 @@ export function render(root) {
       } else {
         openReceipt(sale, { fresh: true });
         toast('Invoice POS berhasil diterbitkan.');
+      }
+
+      if (shouldEmail && isPaid) {
+        try {
+          const result = await notifyPosPayment({ sale, email });
+          toast(
+            result.sent
+              ? `Konfirmasi pembayaran dikirim ke ${email}.`
+              : 'Pembayaran tersimpan, tetapi email konfirmasi belum terkirim.',
+            result.sent ? 'success' : 'warning',
+          );
+        } catch (error) {
+          toast(`Pembayaran tersimpan, email gagal dikirim: ${error.message}`, 'warning');
+        }
       }
 
       if (shouldEmail && sale.invoice) {

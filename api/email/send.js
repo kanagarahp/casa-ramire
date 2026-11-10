@@ -6,7 +6,7 @@ import {
   sendJson,
 } from '../_lib/http.js';
 
-const DEFAULT_FROM = 'Casa Ramire <casaramirejogja@gmail.com>';
+const DEFAULT_FROM = 'Casa Ramire <no-reply@casaramire.com>';
 
 function isEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
@@ -63,6 +63,9 @@ export default async function handler(req, res) {
         subject,
         ...(text ? { text } : {}),
         ...(html ? { html } : {}),
+        reply_to: String(
+          process.env.EMAIL_REPLY_TO || 'casaramirejogja@gmail.com',
+        ),
       }),
       signal: AbortSignal.timeout(20_000),
       cache: 'no-store',

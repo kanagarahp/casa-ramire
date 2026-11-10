@@ -254,8 +254,8 @@ export function render(root) {
           ? `<div class="card border-amber-200 bg-amber-50 p-4 mb-6 flex flex-wrap items-center gap-3">
               <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">${icon('Send', 'w-5 h-5')}</span>
               <div class="min-w-0 flex-1">
-                <p class="text-sm font-extrabold text-amber-900">Aktifkan sinkronisasi &amp; email tagihan</p>
-                <p class="text-xs text-amber-800 mt-0.5">Masukkan kunci admin sekali di Pengaturan agar data tersinkron ke landing page dan tagihan bisa dikirim ke email penghuni.</p>
+                <p class="text-sm font-extrabold text-amber-900">Aktifkan sinkronisasi, booking online &amp; email</p>
+                <p class="text-xs text-amber-800 mt-0.5">Masukkan kunci admin sekali di Pengaturan. Tanpa kunci ini, permintaan booking dari landing page tidak dapat dimuat di menu Booking Online, data kamar tidak tersinkron, dan pengingat H-7 tidak berjalan.</p>
               </div>
               <button type="button" class="btn-gold btn-sm" data-action="open-settings">${icon('Settings', 'w-4 h-4')} Buka Pengaturan</button>
             </div>`
@@ -263,7 +263,7 @@ export function render(root) {
       }
 
       <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
-        ${statCard({ label: 'Total Kamar', value: stats.total, iconName: 'Building2', hint: '2 lantai' })}
+        ${statCard({ label: 'Total Kamar', value: stats.total, iconName: 'Building2', hint: '3 lantai' })}
         ${statCard({ label: 'Terisi', value: stats.occupied, iconName: 'UserCheck', tone: 'green', hint: `${stats.occupancy.toFixed(0)}% okupansi` })}
         ${statCard({ label: 'Kosong', value: stats.vacant, iconName: 'DoorOpen', tone: 'amber', hint: 'Siap dipasarkan' })}
         ${statCard({ label: 'Booking', value: stats.booking, iconName: 'CalendarClock', tone: 'indigo', hint: 'Menunggu check-in' })}

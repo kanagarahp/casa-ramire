@@ -12,9 +12,12 @@ const TEXT_FIELDS = [
   'facilities',
   'catalogAdminKey',
   'paymentInstructions',
+  'notificationEmail',
 ];
 
 const BOOLEAN_FIELDS = ['dokuEnabled'];
+
+const NUMBER_FIELDS = ['parkingCapacity', 'carDailyFee'];
 
 function normalizeText(value) {
   return String(value ?? '').trim();
@@ -37,6 +40,12 @@ export function updateSettings(patch = {}) {
         draft.settings[field] = Boolean(patch[field]);
       }
     }
+    for (const field of NUMBER_FIELDS) {
+      if (patch[field] !== undefined) {
+        const value = Math.max(0, Math.floor(Number(patch[field]) || 0));
+        draft.settings[field] = value;
+      }
+    }
   });
 
   return getSettings();
@@ -57,4 +66,18 @@ export function getAdminWhatsApp() {
 /** DOKU links are opt-in so billing email still works before activation. */
 export function isDokuEnabled() {
   return Boolean(getSettings().dokuEnabled);
+}
+
+export function getNotificationEmail() {
+  return String(getSettings().notificationEmail || 'casaramirejogja@gmail.com').trim();
+}
+
+export function getParkingCapacity() {
+  const value = Math.floor(Number(getSettings().parkingCapacity));
+  return Number.isFinite(value) && value > 0 ? value : 15;
+}
+
+export function getCarDailyFee() {
+  const value = Math.floor(Number(getSettings().carDailyFee));
+  return Number.isFinite(value) && value >= 0 ? value : 10000;
 }
