@@ -19,7 +19,7 @@ test('owner password can be reset with the admin recovery key', async () => {
   });
 
   assert.equal(reset.username, 'owner');
-  const result = login('owner', 'passwordbaru');
+  const result = await login('owner', 'passwordbaru');
   assert.equal(result.ok, true);
   assert.equal(result.user.username, 'owner');
 });

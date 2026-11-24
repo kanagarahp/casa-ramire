@@ -1,4 +1,6 @@
-import { formatDate, rupiah, todayISO, waLink } from '../core/format.js';
+import { formatDate, formatDateTime, rupiah, todayISO, waLink } from '../core/format.js';
+import { getState } from '../core/store.js';
+import { hasApiAuth } from '../services/auth.js';
 import { getBill } from '../services/billing.js';
 import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { clearRenewalPending } from '../services/property.js';
@@ -236,13 +238,18 @@ export function render(root) {
   const trend = getCashflowTrend(6);
   const today = todayISO();
   const settings = getSettings();
+  const lastEditor = getState().meta?.updatedBy;
 
   root.innerHTML = `
     <div data-view="dashboard" class="animate-in">
       ${pageHeader({
         eyebrow: 'Enterprise Dashboard',
         title: 'Dashboard Casa Ramire ☕',
-        subtitle: `Monitor ${stats.total} kamar, antrean check-in, dan kesehatan kas properti.`,
+        subtitle: `Monitor ${stats.total} kamar, antrean check-in, dan kesehatan kas properti.${
+          lastEditor?.name
+            ? ` • Terakhir diubah oleh ${esc(lastEditor.name)} (${formatDateTime(getState().meta?.updatedAt)})`
+            : ''
+        }`,
         actions: `
           <a href="#/rooms" class="btn-primary btn-sm">${icon('Building2', 'w-4 h-4')} Kelola Kamar</a>
           <a href="#/billing" class="btn-outline btn-sm">${icon('ReceiptText', 'w-4 h-4')} Verifikasi Kas</a>
@@ -250,12 +257,12 @@ export function render(root) {
       })}
 
       ${
-        !settings.catalogAdminKey
+        !hasApiAuth()
           ? `<div class="card border-amber-200 bg-amber-50 p-4 mb-6 flex flex-wrap items-center gap-3">
               <span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">${icon('Send', 'w-5 h-5')}</span>
               <div class="min-w-0 flex-1">
-                <p class="text-sm font-extrabold text-amber-900">Aktifkan sinkronisasi, booking online &amp; email</p>
-                <p class="text-xs text-amber-800 mt-0.5">Masukkan kunci admin sekali di Pengaturan. Tanpa kunci ini, permintaan booking dari landing page tidak dapat dimuat di menu Booking Online, data kamar tidak tersinkron, dan pengingat H-7 tidak berjalan.</p>
+                <p class="text-sm font-extrabold text-amber-900">Sesi sinkronisasi belum aktif</p>
+                <p class="text-xs text-amber-800 mt-0.5">Masuk dengan akun owner/staf, atau isi kunci admin di Pengaturan pada perangkat utama. Tanpa sesi ini, data kamar tidak tersinkron dan booking online tidak dapat dimuat.</p>
               </div>
               <button type="button" class="btn-gold btn-sm" data-action="open-settings">${icon('Settings', 'w-4 h-4')} Buka Pengaturan</button>
             </div>`

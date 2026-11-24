@@ -125,6 +125,22 @@ export async function ensureCatalogSchema() {
         )
       `);
       await query(`
+        create table if not exists casa_users (
+          id text primary key,
+          username text not null unique,
+          name text not null,
+          role text not null default 'staff',
+          active boolean not null default true,
+          password_hash text not null,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        )
+      `);
+      await query(`
+        create index if not exists casa_users_username_idx
+          on casa_users (lower(username))
+      `);
+      await query(`
         create table if not exists casa_password_resets (
           id text primary key,
           username text not null,

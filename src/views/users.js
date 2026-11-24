@@ -5,6 +5,7 @@ import {
   deleteUser,
   getActiveUser,
   isOwner,
+  loadRemoteUsers,
   resetUserPassword,
   updateUser,
 } from '../services/auth.js';
@@ -14,10 +15,12 @@ import {
   pageHeader,
   statCard,
 } from '../ui/components.js';
-import { delegate, esc } from '../ui/dom.js';
+import { delegate, esc, setBusy } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+
+let directoryRefreshRequested = false;
 
 function roleBadge(role) {
   return role === 'owner'
@@ -38,6 +41,11 @@ export function render(root) {
       </div>
     `;
     return;
+  }
+
+  if (!directoryRefreshRequested) {
+    directoryRefreshRequested = true;
+    loadRemoteUsers().catch(() => {});
   }
 
   const users = [...getState().users].sort((a, b) => a.name.localeCompare(b.name, 'id'));
@@ -113,7 +121,7 @@ export function render(root) {
                           <td>
                             <div class="flex flex-wrap items-center justify-end gap-1">
                               <button type="button" class="btn-outline btn-xs" data-action="edit-user" data-id="${user.id}">${icon('Pencil', 'w-3 h-3')} Edit</button>
-                              <button type="button" class="btn-ghost btn-xs" data-action="reset-password" data-id="${user.id}" title="Reset password">${icon('KeyRound', 'w-3.5 h-3.5')}</button>
+                              <button type="button" class="btn-ghost btn-xs" data-action="reset-password" data-id="${user.id}" title="${isSelf ? 'Gunakan Pengaturan → Ganti password' : 'Reset password'}" ${isSelf ? 'disabled' : ''}>${icon('KeyRound', 'w-3.5 h-3.5')}</button>
                               <button type="button" class="btn-ghost btn-xs ${user.active ? 'text-amber-700' : 'text-emerald-700'}" data-action="toggle-active" data-id="${user.id}" title="${user.active ? 'Nonaktifkan akun' : 'Aktifkan akun'}" ${isSelf ? 'disabled' : ''}>
                                 ${icon(user.active ? 'Lock' : 'Unlock', 'w-3.5 h-3.5')}
                               </button>
@@ -132,7 +140,8 @@ export function render(root) {
 
       <p class="hint mt-3 flex items-center gap-1.5">
         ${icon('Info', 'w-3.5 h-3.5')}
-        Password disimpan dalam bentuk hash SHA-256 bersalt di perangkat ini, bukan teks asli.
+        Password disimpan sebagai hash di server, bukan teks asli.
+        Akun dan role <b>otomatis tersinkron</b> ke semua perangkat.
       </p>
     </div>
   `;
@@ -172,7 +181,7 @@ export function render(root) {
         if (!approved) return;
       }
       try {
-        updateUser(user.id, { active: !user.active });
+        await updateUser(user.id, { active: !user.active });
         toast(user.active ? 'Akun dinonaktifkan.' : 'Akun diaktifkan kembali.');
       } catch (error) {
         toast(error.message, 'error');
@@ -189,7 +198,7 @@ export function render(root) {
       });
       if (!approved) return;
       try {
-        deleteUser(user.id);
+        await deleteUser(user.id);
         toast('Akun berhasil dihapus.');
       } catch (error) {
         toast(error.message, 'error');
@@ -250,18 +259,20 @@ function openUserModal(user = null) {
       <button type="submit" form="user-form" class="btn-primary btn-sm">${icon('Check', 'w-4 h-4')} ${isEdit ? 'Simpan perubahan' : 'Buat akun'}</button>
     `,
     onMount(el, close) {
-      el.querySelector('#user-form').addEventListener('submit', (event) => {
+      el.querySelector('#user-form').addEventListener('submit', async (event) => {
         event.preventDefault();
+        const submit = el.querySelector('button[type="submit"]');
+        setBusy(submit, true, 'Menyimpan…');
         try {
           if (isEdit) {
-            updateUser(user.id, {
+            await updateUser(user.id, {
               name: el.querySelector('#usr-name').value,
               role: el.querySelector('#usr-role').value,
               active: el.querySelector('#usr-active').checked,
             });
             toast('Akun berhasil diperbarui.');
           } else {
-            createUser({
+            await createUser({
               name: el.querySelector('#usr-name').value,
               username: el.querySelector('#usr-username').value,
               password: el.querySelector('#usr-password').value,
@@ -272,6 +283,7 @@ function openUserModal(user = null) {
           close();
         } catch (error) {
           toast(error.message, 'error');
+          setBusy(submit, false);
         }
       });
     },
@@ -301,7 +313,7 @@ function openResetPasswordModal(user) {
       <button type="submit" form="reset-form" class="btn-primary btn-sm">${icon('KeyRound', 'w-4 h-4')} Reset password</button>
     `,
     onMount(el, close) {
-      el.querySelector('#reset-form').addEventListener('submit', (event) => {
+      el.querySelector('#reset-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         const password = el.querySelector('#rst-password').value;
         const confirmation = el.querySelector('#rst-confirm').value;
@@ -309,12 +321,15 @@ function openResetPasswordModal(user) {
           toast('Konfirmasi password tidak cocok.', 'error');
           return;
         }
+        const submit = el.querySelector('button[type="submit"]');
+        setBusy(submit, true, 'Menyimpan…');
         try {
-          resetUserPassword(user.id, password);
+          await resetUserPassword(user.id, password);
           toast('Password berhasil direset.');
           close();
         } catch (error) {
           toast(error.message, 'error');
+          setBusy(submit, false);
         }
       });
     },

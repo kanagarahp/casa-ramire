@@ -3,35 +3,26 @@ import { esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
+import { getApiAuthHeaders, hasApiAuth } from './auth.js';
 import { getSettings } from './settings.js';
 import { sendPaymentEmail } from './email.js';
 import { ensureSynced } from './sync.js';
 
-function adminKey() {
-  return String(getSettings().catalogAdminKey || '').trim();
-}
-
 async function postPaymentLink(payload) {
-  const key = adminKey();
-  if (!key) {
-    throw new Error(
-      'Kunci admin belum diisi. Buka Pengaturan → Landing page & katalog publik.',
-    );
+  if (!hasApiAuth()) {
+    throw new Error('Sesi login tidak valid. Silakan masuk kembali.');
   }
 
   const synced = await ensureSynced();
   if (!synced) {
     throw new Error(
-      'Sinkronisasi data belum siap. Periksa koneksi dan kunci admin, lalu coba lagi.',
+      'Sinkronisasi data belum siap. Periksa koneksi login, lalu coba lagi.',
     );
   }
 
   const response = await fetch('/api/payments/doku/create', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-key': key,
-    },
+    headers: getApiAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   });
 

@@ -1,4 +1,5 @@
 import { rupiah } from '../core/format.js';
+import { hasApiAuth } from '../services/auth.js';
 import { publishCatalog } from '../services/catalog.js';
 import {
   addGalleryPhoto,
@@ -85,7 +86,7 @@ export function render(root) {
       <div class="rounded-2xl border border-line bg-white p-4 mb-5 text-xs text-stone-600 leading-relaxed">
         <b class="text-stone-800">Cara kerja:</b> unggah foto di sini, atur urutannya, lalu klik
         <b>Publikasikan</b>. Foto pertama menjadi gambar utama di bagian hero landing page.
-        ${settings.catalogAdminKey ? '' : '<span class="block mt-1 text-rose-700 font-semibold">Kunci admin belum diisi — buka Pengaturan untuk mengisi kunci publikasi.</span>'}
+        ${hasApiAuth() ? '' : '<span class="block mt-1 text-rose-700 font-semibold">Sesi login belum aktif — masuk kembali untuk mempublikasikan.</span>'}
       </div>
 
       ${
@@ -148,15 +149,13 @@ export function render(root) {
     }
 
     if (action === 'publish') {
-      const values = getSettings();
-      if (!values.catalogAdminKey) {
-        toast('Isi kunci admin di Pengaturan terlebih dahulu.', 'error');
+      if (!hasApiAuth()) {
+        toast('Sesi login tidak valid. Silakan masuk kembali.', 'error');
         return;
       }
       setBusy(target, true, 'Mempublikasikan…');
       try {
         const result = await publishCatalog({
-          adminKey: values.catalogAdminKey,
           onProgress: ({ label }) => {
             if (label) target.textContent = label;
           },

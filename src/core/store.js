@@ -329,10 +329,32 @@ function emit() {
 /**
  * Mutate the state, persist it and notify subscribers.
  * @param {(draft: ReturnType<typeof buildSeedState>) => void} mutator
+ * @param {{touchMeta?: boolean}} [options] Pass `touchMeta: false` for
+ *   session-only changes so login/logout does not look like a data edit.
  */
-export function update(mutator) {
+export function update(mutator, { touchMeta = true } = {}) {
   mutator(state);
-  state.meta = { ...state.meta, updatedAt: new Date().toISOString() };
+
+  if (touchMeta) {
+    const user = (state.users || []).find(
+      (item) => String(item.id) === String(state.session?.userId),
+    );
+    state.meta = {
+      ...state.meta,
+      updatedAt: new Date().toISOString(),
+      ...(user
+        ? {
+            updatedBy: {
+              id: user.id,
+              name: user.name,
+              username: user.username,
+              role: user.role,
+            },
+          }
+        : {}),
+    };
+  }
+
   storage.set(STORAGE_KEY, state);
   emit();
 }

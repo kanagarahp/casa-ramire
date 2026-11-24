@@ -1,5 +1,12 @@
 import crypto from 'node:crypto';
 
+import { query } from './db.js';
+import {
+  getBearerToken,
+  tokenMatchesPassword,
+  verifyToken,
+} from './token.js';
+
 export function sendJson(res, status, payload) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -52,19 +59,54 @@ export function readRawBody(req) {
   });
 }
 
-export function requireAdmin(req, res) {
+export async function requireAdmin(req, res) {
+  // A login token from any device is enough for state sync, bookings, email,
+  // payments, and catalog operations.
+  const payload = verifyToken(getBearerToken(req));
+  if (payload) {
+    // Honour account deactivation without waiting for token expiry. If the
+    // database is temporarily unreachable, keep the session alive rather than
+    // locking every device out.
+    try {
+      const result = await query(
+        'select active, password_hash from casa_users where id = $1',
+        [String(payload.sub)],
+      );
+      if (!result.rows.length) {
+        sendJson(res, 401, { error: 'Akun tidak ditemukan. Silakan masuk kembali.' });
+        return false;
+      }
+      const row = result.rows[0];
+      if (!row.active) {
+        sendJson(res, 401, { error: 'Akun ini sudah dinonaktifkan.' });
+        return false;
+      }
+      if (!tokenMatchesPassword(payload, row.password_hash)) {
+        sendJson(res, 401, {
+          error: 'Sesi login berakhir. Silakan masuk kembali.',
+        });
+        return false;
+      }
+    } catch {
+      /* keep the token valid when the database check fails */
+    }
+    return true;
+  }
+
   const configuredKey = String(process.env.CATALOG_ADMIN_KEY || '').trim();
   const providedKey = String(req.headers['x-admin-key'] || '').trim();
 
   if (!configuredKey) {
     sendJson(res, 503, {
-      error: 'Kunci publikasi katalog belum dikonfigurasi di server.',
+      error: 'Kunci admin belum dikonfigurasi di server.',
     });
     return false;
   }
 
   if (!providedKey) {
-    sendJson(res, 401, { error: 'Kunci publikasi katalog wajib diisi.' });
+    sendJson(res, 401, {
+      error: 'Sesi login tidak valid. Silakan masuk kembali.',
+    });
     return false;
   }
 
@@ -74,7 +116,7 @@ export function requireAdmin(req, res) {
     expected.length === received.length && crypto.timingSafeEqual(expected, received);
 
   if (!valid) {
-    sendJson(res, 401, { error: 'Kunci publikasi katalog tidak valid.' });
+    sendJson(res, 401, { error: 'Kunci admin tidak valid.' });
     return false;
   }
 

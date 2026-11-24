@@ -1,9 +1,6 @@
 import { formatDate, rupiah } from '../core/format.js';
+import { getApiAuthHeaders, hasApiAuth } from './auth.js';
 import { getBankDetails, getNotificationEmail, getSettings } from './settings.js';
-
-function adminKey() {
-  return String(getSettings().catalogAdminKey || '').trim();
-}
 
 export function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
@@ -27,9 +24,8 @@ export async function sendEmail({ to, subject, text }) {
   const target = String(to || '').trim();
   if (!isValidEmail(target)) throw new Error('Alamat email penerima tidak valid.');
 
-  const key = adminKey();
-  if (!key) {
-    const error = new Error('Kunci admin belum diisi. Buka Pengaturan terlebih dahulu.');
+  if (!hasApiAuth()) {
+    const error = new Error('Sesi login tidak valid. Silakan masuk kembali.');
     error.code = 'EMAIL_NOT_CONFIGURED';
     throw error;
   }
@@ -38,10 +34,7 @@ export async function sendEmail({ to, subject, text }) {
   try {
     response = await fetch('/api/email/send', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-key': key,
-      },
+      headers: getApiAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ to: target, subject, text }),
     });
   } catch {

@@ -1,6 +1,7 @@
 import { NAV_ITEMS, PAGE_META, ROLES } from '../core/constants.js';
 import { formatDateLong } from '../core/format.js';
 import { logout } from '../services/auth.js';
+import { getSyncState } from '../services/sync.js';
 import { brandMark } from '../ui/brand.js';
 import { avatar } from '../ui/components.js';
 import { esc } from '../ui/dom.js';
@@ -11,6 +12,14 @@ export function renderShell(user, route) {
   const navItems = NAV_ITEMS.filter((item) => !item.ownerOnly || user.role === 'owner');
   const meta = PAGE_META[route] || PAGE_META.dashboard;
   const roleLabel = ROLES[user.role]?.short || 'STAFF';
+  const sync = getSyncState();
+  const syncLabel = !sync.keySet ? 'Sinkron nonaktif' : sync.ready ? 'Tersinkron' : 'Menyinkronkan…';
+  const syncDot = !sync.keySet ? 'bg-stone-400' : sync.ready ? 'bg-emerald-500' : 'bg-amber-500';
+  const syncTitle = !sync.keySet
+    ? 'Kunci admin belum diisi. Data hanya tersimpan di perangkat ini.'
+    : sync.ready
+      ? 'Data perangkat ini sama dengan data server.'
+      : 'Sedang mengambil data terbaru dari server.';
 
   return `
     <div class="flex h-dvh overflow-hidden">
@@ -76,6 +85,10 @@ export function renderShell(user, route) {
             <p id="topbar-subtitle" class="text-[11px] text-stone-600 truncate hidden sm:block">${esc(meta.subtitle)}</p>
           </div>
           <div class="ml-auto flex items-center gap-2 sm:gap-3">
+            <button type="button" data-action="settings" data-sync-badge class="hidden md:flex items-center gap-1.5 text-[10px] font-bold text-stone-600 bg-white border border-line rounded-xl px-2.5 py-2 hover:bg-cream transition" title="${syncTitle}">
+              <span data-sync-dot class="w-1.5 h-1.5 rounded-full ${syncDot}"></span>
+              <span data-sync-label>${syncLabel}</span>
+            </button>
             <span class="hidden md:flex items-center gap-1.5 text-[11px] font-semibold text-stone-500 bg-white border border-line rounded-xl px-3 py-2">
               ${icon('CalendarDays', 'w-3.5 h-3.5 text-gold-700')}
               ${formatDateLong(new Date())}

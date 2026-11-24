@@ -1,11 +1,7 @@
 import { storage } from '../core/storage.js';
-import { getSettings } from './settings.js';
+import { getApiAuthHeaders, hasApiAuth } from './auth.js';
 
 const LOCAL_KEY = 'casa-ramire:booking-requests';
-
-function adminKey() {
-  return String(getSettings().catalogAdminKey || '').trim();
-}
 
 function readLocal() {
   const list = storage.get(LOCAL_KEY);
@@ -91,16 +87,15 @@ function saveLocalBooking(payload, cause) {
 
 /** Load booking requests for the admin/owner panel. */
 export async function fetchBookingRequests({ status = '' } = {}) {
-  const key = adminKey();
   const local = readLocal().map((item) => ({ ...item, source: 'local' }));
-  if (!key) {
-    return { requests: local, offline: true, reason: 'Kunci admin belum diisi.', promos: [] };
+  if (!hasApiAuth()) {
+    return { requests: local, offline: true, reason: 'Belum masuk ke sistem.', promos: [] };
   }
 
   let response;
   try {
     response = await fetch(`/api/bookings${status ? `?status=${encodeURIComponent(status)}` : ''}`, {
-      headers: { Accept: 'application/json', 'x-admin-key': key },
+      headers: getApiAuthHeaders({ Accept: 'application/json' }),
       cache: 'no-store',
     });
   } catch (error) {
@@ -148,15 +143,11 @@ export async function updateBookingRequest({ id, code, status, source }) {
     return { ok: true };
   }
 
-  const key = adminKey();
-  if (!key) throw new Error('Kunci admin belum diisi.');
+  if (!hasApiAuth()) throw new Error('Sesi login tidak valid. Silakan masuk kembali.');
 
   const response = await fetch('/api/bookings', {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-key': key,
-    },
+    headers: getApiAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ id, status }),
   });
 

@@ -26,7 +26,7 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function isAuthorized(req, res) {
+async function isAuthorized(req, res) {
   const secret = String(process.env.CRON_SECRET || '').trim();
   const header = String(req.headers.authorization || '').trim();
   if (secret && header === `Bearer ${secret}`) return true;
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
-  if (!isAuthorized(req, res)) return;
+  if (!(await isAuthorized(req, res))) return;
 
   try {
     await ensureCatalogSchema();

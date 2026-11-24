@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { findUserByUsername, hashPassword } from '../_lib/auth.js';
 import { ensureCatalogSchema, query } from '../_lib/db.js';
 import { asString, methodNotAllowed, readBody, sendJson } from '../_lib/http.js';
 
@@ -76,13 +77,32 @@ export default async function handler(req, res) {
       return sendJson(res, 400, { error: 'Kode verifikasi salah.' });
     }
 
+    const user = await findUserByUsername(username);
+    if (!user) {
+      return sendJson(res, 404, {
+        error:
+          'Akun owner belum ada di server. Buka aplikasi sekali di perangkat utama owner, lalu minta kode baru.',
+      });
+    }
+    if (!user.active) {
+      return sendJson(res, 403, { error: 'Akun ini sedang dinonaktifkan.' });
+    }
+    if (user.role !== 'owner') {
+      return sendJson(res, 403, {
+        error: 'Password admin/staf hanya dapat direset oleh owner.',
+      });
+    }
+
+    await query(
+      'update casa_users set password_hash = $2, updated_at = now() where id = $1',
+      [user.id, hashPassword(newPassword)],
+    );
+
     await query(
       'update casa_password_resets set used_at = now() where id = $1',
       [row.id],
     );
 
-    // The actual password hash lives on the owner's device. The client stores
-    // the new hash locally after this server-side code verification succeeds.
     return sendJson(res, 200, { ok: true });
   } catch (error) {
     console.error('[auth] gagal reset password', error);

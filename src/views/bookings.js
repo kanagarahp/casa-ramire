@@ -128,7 +128,7 @@ export function render(root) {
               ${icon('AlertTriangle', 'w-4 h-4 shrink-0 mt-0.5')}
               <div class="flex-1">
                 <p>${esc(notice)}</p>
-                <p class="text-[10px] mt-1">Booking dari landing page tetap tersimpan di server. Agar daftar ini memuat data server, pastikan <b>Kunci admin</b> di Pengaturan sama dengan <code class="font-mono">CATALOG_ADMIN_KEY</code> di Vercel.</p>
+                <p class="text-[10px] mt-1">Booking dari landing page tetap tersimpan di server. Agar daftar ini memuat data server, pastikan Anda sudah login dengan akun yang benar dan terhubung ke internet.</p>
               </div>
               <button type="button" class="btn-outline btn-xs shrink-0" data-action="open-settings">${icon('Settings', 'w-3 h-3')} Pengaturan</button>
             </div>`

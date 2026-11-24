@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { findUserByUsername } from '../_lib/auth.js';
 import { ensureCatalogSchema, query } from '../_lib/db.js';
 import {
   emailConfigured,
@@ -52,6 +53,14 @@ export default async function handler(req, res) {
 
   try {
     await ensureCatalogSchema();
+
+    const user = await findUserByUsername(username);
+    if (!user || user.role !== 'owner' || !user.active) {
+      return sendJson(res, 404, {
+        error:
+          'Akun owner tidak ditemukan di server. Buka aplikasi sekali di perangkat utama owner, lalu coba lagi.',
+      });
+    }
 
     const recent = await query(
       `select count(*)::int as total

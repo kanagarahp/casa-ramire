@@ -4,8 +4,9 @@ Sistem manajemen properti kos untuk **Casa Ramire**. Aplikasi ini menggantikan
 file `index.html` tunggal yang lama dengan arsitektur modul yang lebih rapi,
 mudah dirawat, dan siap dikembangkan.
 
-Aplikasi berjalan sepenuhnya di browser (*local-first*): tidak membutuhkan
-server, database, atau koneksi internet setelah halaman dimuat. Data disimpan di
+Aplikasi berjalan di browser dengan **login terpusat**: akun diverifikasi oleh
+server, lalu data operasional disinkronkan ke Postgres sehingga laptop, HP, dan
+tablet melihat data yang sama setelah login. Data juga tetap di-cache di
 `localStorage` perangkat dan dapat dicadangkan ke file JSON.
 
 ## Fitur
@@ -91,7 +92,7 @@ dipublikasikan. Setelah dikirim, calon penghuni menerima kode booking
 
 1. Buka **Galeri Landing**.
 2. Klik **Tambah Foto**, pilih satu/beberapa foto, atur urutan dan keterangan.
-3. Isi **Kunci admin** di **Pengaturan** bila belum.
+3. Pastikan sudah login (owner/staf). Kunci admin hanya diperlukan di perangkat utama.
 4. Klik **Publikasikan** (atau **Pengaturan → Publikasikan katalog**).
 
 Saat publikasi, foto lokal diunggah ke `/api/catalog/photo`, lalu snapshot aman
@@ -116,13 +117,19 @@ agar kode terbaru aktif di landing page.
 ### Environment publikasi
 
 ```text
-POSTGRES_URL / POSTGRES_URL_NON_POOLING   # database katalog, state, booking, promo
-CATALOG_ADMIN_KEY                          # kunci publikasi & sinkronisasi
+POSTGRES_URL / POSTGRES_URL_NON_POOLING   # database katalog, state, akun, booking, promo
+CATALOG_ADMIN_KEY                          # seed akun, publikasi, & kompatibilitas perangkat lama
+AUTH_TOKEN_SECRET                          # opsional: penanda tangan token login
 ```
 
 `CATALOG_ADMIN_KEY` **tidak** ditanam di bundle frontend. Kunci dimasukkan sekali
-oleh admin melalui Pengaturan dan disimpan hanya di perangkat admin tersebut.
-File `.env.catalog` (di-ignore Git) menyimpan kunci untuk referensi lokal.
+oleh owner melalui Pengaturan pada **perangkat utama**; perangkat itu akan
+menyiapkan tabel akun server. Setelah itu, perangkat lain cukup login dengan
+username/password — tidak perlu mengisi kunci. File `.env.catalog` (di-ignore
+Git) menyimpan kunci untuk referensi lokal.
+
+`AUTH_TOKEN_SECRET` opsional; jika kosong, `CATALOG_ADMIN_KEY` dipakai untuk
+menandatangani token login. Mengganti nilai ini membatalkan semua sesi login.
 
 Endpoint publik terkait:
 
@@ -130,8 +137,20 @@ Endpoint publik terkait:
 GET  /api/catalog               # snapshot galeri/profil/pricelist
 GET  /api/availability          # hitungan kamar live (tanpa data pribadi)
 POST /api/bookings              # kirim booking dari landing page
-GET/PATCH /api/bookings         # daftar & status booking (butuh kunci admin)
+GET/PATCH /api/bookings         # daftar & status booking (butuh login)
+
+POST /api/auth/login            # login username/password -> token
+GET  /api/auth/users            # direktori akun (butuh login)
+POST/PATCH/DELETE /api/auth/users  # kelola akun (owner)
+POST /api/auth/change-password  # ganti password sendiri
+POST /api/auth/bootstrap        # seed akun dari perangkat utama (kunci admin)
+POST /api/auth/forgot-password  # kirim kode reset owner
+POST /api/auth/reset-password   # verifikasi kode + simpan password baru
+POST /api/auth/recover          # reset owner dengan kunci admin
 ```
+
+Endpoint terproteksi menerima `Authorization: Bearer <token>` atau, untuk
+kompatibilitas perangkat lama, header `x-admin-key`.
 
 ## POS / Kasir
 
@@ -238,10 +257,11 @@ Catatan:
 
 - Channel DOKU harus aktif. Kalau belum, pembuatan link akan gagal dengan
   pesan `PAYMENT CHANNEL IS INACTIVE`.
-- Sinkronisasi state baru aktif setelah **Kunci admin** diisi di
-  **Pengaturan → Landing page & katalog publik**.
-- Data operasional tetap disimpan lokal, lalu disinkronkan ke Postgres. Jika
-  ada konflik versi, aplikasi akan memuat state server terbaru dan menampilkan
+- Sinkronisasi state aktif otomatis setelah **login** dengan akun owner/staf.
+  Kunci admin hanya diperlukan sekali di perangkat utama untuk menyiapkan akun
+  server dan sebagai jalur pemulihan.
+- Data operasional di-cache lokal lalu disinkronkan ke Postgres. Jika ada
+  konflik versi, aplikasi memuat state server terbaru dan menampilkan
   peringatan.
 - Foto kamar/galeri tetap dipublikasikan terpisah lewat **Publikasikan** di
   Galeri Landing atau Pengaturan.
@@ -265,18 +285,19 @@ setelah login pertama.
 Owner dapat mengakses seluruh menu. Staf tidak dapat membuka **Manajemen Akun**
 dan tidak melihat aksi pemeliharaan data.
 
-> Password disimpan sebagai hash SHA-256 bersalt di perangkat. Untuk penggunaan
-> produksi dengan banyak pengguna, gunakan backend autentikasi sungguhan.
+> Password disimpan sebagai hash **scrypt** di tabel `casa_users` pada server.
+> Akun, role, dan status aktif berlaku di semua perangkat. Token login berlaku
+> 30 hari dan otomatis dibatalkan saat password diubah atau akun dinonaktifkan.
 
 ### Lupa password owner?
 
-Di halaman login ada tombol **Lupa password?**. Reset membutuhkan **kunci admin**
-(nilai `CATALOG_ADMIN_KEY`, juga dipakai untuk sinkronisasi/pembayaran). Kunci
-tersebut ada di file `.env.catalog` atau di environment Vercel.
+Di halaman login ada tombol **Lupa password?**. Kode 6 digit dikirim ke email
+owner, lalu password baru disimpan **di server** sehingga berlaku di semua
+perangkat.
 
-Reset hanya mengubah password pada browser/perangkat yang sedang dipakai,
-karena data akun disimpan di `localStorage` perangkat. Jika owner memakai
-beberapa perangkat, lakukan reset di perangkat yang ingin dipakai.
+Alternatif lain: buka **Pengaturan** di perangkat utama, lalu gunakan kunci
+admin (`CATALOG_ADMIN_KEY`) untuk reset owner. Kunci tersebut ada di file
+`.env.catalog` atau di environment Vercel.
 
 ## Menjalankan aplikasi
 

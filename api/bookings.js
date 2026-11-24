@@ -294,7 +294,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     const url = new URL(req.url, 'http://localhost');
     const status = asString(url.searchParams.get('status'), 20);
     if (status && !STATUSES.includes(status)) {
@@ -436,7 +436,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
 
     let body;
     try {

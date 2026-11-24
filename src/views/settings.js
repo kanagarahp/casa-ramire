@@ -5,7 +5,7 @@ import {
   replaceState,
   resetOperationalData,
 } from '../core/store.js';
-import { changeOwnPassword, getActiveUser, isOwner } from '../services/auth.js';
+import { changeOwnPassword, getActiveUser, hasApiAuth, isOwner } from '../services/auth.js';
 import { publishCatalog } from '../services/catalog.js';
 import { sendEmail } from '../services/email.js';
 import { runBillingReminders } from '../services/reminders.js';
@@ -76,7 +76,9 @@ export function openSettingsModal() {
         ${section({
           iconName: 'DatabaseBackup',
           title: 'Cadangan & pemulihan data',
-          description: `Terakhir diperbarui: ${formatDateTime(state.meta?.updatedAt)}`,
+          description: `Terakhir diperbarui: ${formatDateTime(state.meta?.updatedAt)}${
+            state.meta?.updatedBy?.name ? ` oleh ${esc(state.meta.updatedBy.name)}` : ''
+          }`,
           body: `
             <div class="flex flex-wrap gap-2">
               <button type="button" class="btn-outline btn-sm" data-action="export-backup">
@@ -145,10 +147,10 @@ export function openSettingsModal() {
               </div>
 
               <div class="rounded-xl border border-line bg-cream/60 p-3">
-                <label class="label" for="set-catalog-key">Kunci admin (katalog, sinkronisasi &amp; pembayaran)</label>
-                <input id="set-catalog-key" type="password" class="input" value="${esc(settings.catalogAdminKey || '')}" placeholder="Masukkan kunci dari owner" autocomplete="off" />
-                <p class="hint mt-1">Kunci ini hanya disimpan di perangkat ini. Dipakai untuk publikasi katalog, sinkronisasi data, email tagihan, dan (jika diaktifkan) link pembayaran DOKU. Jangan bagikan.</p>
-                <p class="hint mt-1">Setelah kunci diisi, data akan disinkronkan otomatis ke landing page dan tombol Kirim Tagihan dapat memakai email.</p>
+                <label class="label" for="set-catalog-key">Kunci admin (perangkat utama &amp; pemulihan)</label>
+                <input id="set-catalog-key" type="password" class="input" value="${esc(settings.catalogAdminKey || '')}" placeholder="Opsional untuk perangkat yang sudah login" autocomplete="off" />
+                <p class="hint mt-1">Kunci ini hanya disimpan di perangkat ini dan dipakai untuk menyiapkan akun server, publikasi katalog darurat, serta pemulihan owner. Jangan bagikan.</p>
+                <p class="hint mt-1"><b>Perangkat lain cukup login dengan akun owner/staf.</b> Data kamar, penghuni, dan tagihan akan ditarik otomatis dari server tanpa perlu mengisi kunci ini.</p>
               </div>
 
               <div class="flex flex-wrap items-center gap-2">
@@ -254,7 +256,7 @@ export function openSettingsModal() {
     footer: `<button type="button" class="btn-outline btn-sm" data-modal-close>Tutup</button>`,
     onMount(el, close) {
       const passwordForm = el.querySelector('#settings-password-form');
-      passwordForm?.addEventListener('submit', (event) => {
+      passwordForm?.addEventListener('submit', async (event) => {
         event.preventDefault();
         const current = el.querySelector('#pwd-current').value;
         const next = el.querySelector('#pwd-new').value;
@@ -263,12 +265,16 @@ export function openSettingsModal() {
           toast('Konfirmasi password tidak cocok.', 'error');
           return;
         }
+        const submit = passwordForm.querySelector('button[type="submit"]');
+        setBusy(submit, true, 'Menyimpan…');
         try {
-          changeOwnPassword(current, next);
+          await changeOwnPassword(current, next);
           passwordForm.reset();
           toast('Password berhasil diperbarui.');
         } catch (error) {
           toast(error.message, 'error');
+        } finally {
+          setBusy(submit, false);
         }
       });
 
@@ -366,16 +372,14 @@ export function openSettingsModal() {
           return;
         }
 
-        if (!values.catalogAdminKey) {
-          toast('Isi kunci publikasi katalog terlebih dahulu.', 'error');
-          el.querySelector('#set-catalog-key').focus();
+        if (!hasApiAuth()) {
+          toast('Sesi login tidak valid. Silakan masuk kembali.', 'error');
           return;
         }
 
         setBusy(button, true, 'Mempublikasikan katalog…');
         try {
           const result = await publishCatalog({
-            adminKey: values.catalogAdminKey,
             onProgress: ({ label }) => {
               if (label) button.textContent = label;
             },

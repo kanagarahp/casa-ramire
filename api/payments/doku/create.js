@@ -36,7 +36,7 @@ function findById(list, id) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     await ensureCatalogSchema();

@@ -1,9 +1,23 @@
 import { replaceState, getState, subscribe } from '../core/store.js';
 import { rupiah } from '../core/format.js';
+import { storage } from '../core/storage.js';
 import { toast } from '../ui/toast.js';
+import {
+  bootstrapAccounts,
+  getApiAuthHeaders,
+  getAuthToken,
+  handleAuthExpired,
+  loadRemoteUsers,
+} from './auth.js';
 import { getSettings } from './settings.js';
 
 const POLL_INTERVAL = 15_000;
+
+/**
+ * Marker that this browser has completed a sync with the server at least once.
+ * It protects a fresh device from pushing its empty seed state over real data.
+ */
+const SYNC_MARK_KEY = 'casa-ramire:sync';
 
 let started = false;
 let ready = false;
@@ -13,7 +27,7 @@ let pushing = false;
 let pulling = false;
 let pushTimer = null;
 let pollTimer = null;
-let lastKey = '';
+let lastCredential = '';
 let unsubscribe = null;
 let authWarned = false;
 
@@ -23,6 +37,59 @@ function handleFocus() {
 
 function adminKey() {
   return String(getSettings().catalogAdminKey || '').trim();
+}
+
+/** Login token from any device, with the legacy admin key as fallback. */
+function syncCredential() {
+  return getAuthToken() || adminKey();
+}
+
+function readSyncMark() {
+  const mark = storage.get(SYNC_MARK_KEY);
+  return mark && typeof mark === 'object' ? mark : null;
+}
+
+function writeSyncMark() {
+  storage.set(SYNC_MARK_KEY, {
+    version,
+    at: new Date().toISOString(),
+  });
+}
+
+/**
+ * A device may push its local state during the first sync only when it has
+ * synced at the same server version before. A fresh device (no marker) must
+ * always pull first so its empty seed never replaces real server data.
+ */
+function canPushOnFirstSync(serverVersion) {
+  const mark = readSyncMark();
+  return Boolean(mark) && Number(mark.version) === Number(serverVersion);
+}
+
+function refreshSyncBadge() {
+  const badge = document.querySelector('[data-sync-badge]');
+  if (!badge) return;
+
+  const { keySet, ready: synced } = getSyncState();
+  const state = !keySet ? 'off' : synced ? 'on' : 'pending';
+  const dot = badge.querySelector('[data-sync-dot]');
+  const label = badge.querySelector('[data-sync-label]');
+
+  if (dot) {
+    dot.className = `w-1.5 h-1.5 rounded-full ${
+      state === 'on' ? 'bg-emerald-500' : state === 'pending' ? 'bg-amber-500' : 'bg-stone-400'
+    }`;
+  }
+  if (label) {
+    label.textContent =
+      state === 'on' ? 'Tersinkron' : state === 'pending' ? 'Menyinkronkan…' : 'Sinkron nonaktif';
+  }
+  badge.title =
+    state === 'on'
+      ? 'Data perangkat ini sama dengan data server.'
+      : state === 'pending'
+        ? 'Sedang mengambil data terbaru dari server.'
+        : 'Belum masuk atau kunci admin belum diisi. Data hanya tersimpan di perangkat ini.';
 }
 
 function sanitizeForServer(state) {
@@ -142,26 +209,39 @@ function applyServerState(serverState, { notify = true } = {}) {
     applying = false;
   }
   ready = true;
+  writeSyncMark();
+  refreshSyncBadge();
   if (notify) notifyRemoteChanges(before, next);
 }
 
 async function pull() {
-  const key = adminKey();
-  if (!key || pulling) return;
+  if (!syncCredential()) {
+    if (getState().session?.remote) {
+      handleAuthExpired();
+      toast('Sesi login berakhir. Silakan masuk kembali.', 'error');
+    }
+    return;
+  }
+  if (pulling) return;
   if (ready && (pushing || pushTimer)) return;
 
   pulling = true;
   try {
     const response = await fetch('/api/state', {
-      headers: { Accept: 'application/json', 'x-admin-key': key },
+      headers: getApiAuthHeaders({ Accept: 'application/json' }),
       cache: 'no-store',
     });
 
     const contentType = response.headers.get('content-type') || '';
     if (!response.ok || !contentType.includes('application/json')) {
-      if (response.status === 401 && !authWarned) {
-        authWarned = true;
-        toast('Kunci admin tidak valid. Periksa Pengaturan.', 'error');
+      if (response.status === 401) {
+        if (getAuthToken()) {
+          handleAuthExpired();
+          toast('Sesi login berakhir. Silakan masuk kembali.', 'error');
+        } else if (!authWarned) {
+          authWarned = true;
+          toast('Kunci admin tidak valid. Periksa Pengaturan.', 'error');
+        }
       }
       return;
     }
@@ -179,15 +259,26 @@ async function pull() {
     const nextVersion = Number(payload.version) || 0;
 
     if (!ready) {
-      const localAt = Date.parse(getState().meta?.updatedAt || 0);
-      const serverAt = Date.parse(payload.state?.meta?.updatedAt || 0);
+      const mark = readSyncMark();
+      const localAt = Date.parse(getState().meta?.updatedAt || 0) || 0;
+      const syncedAt = Date.parse(mark?.at || 0) || 0;
+      const hasLocalEdits = Boolean(mark) && localAt > syncedAt;
       version = nextVersion;
 
-      if (serverAt > localAt) {
-        applyServerState(payload.state);
-      } else {
+      // A device that has never synced must never overwrite the server with
+      // its seed/empty state. It may only push when the server is still at
+      // the exact version this device last synced with.
+      if (hasLocalEdits && canPushOnFirstSync(nextVersion)) {
         ready = true;
         await push();
+      } else {
+        if (hasLocalEdits) {
+          toast(
+            'Data server lebih baru. Perubahan lokal yang belum terkirim digantikan data server.',
+            'warning',
+          );
+        }
+        applyServerState(payload.state);
       }
       return;
     }
@@ -200,12 +291,12 @@ async function pull() {
     console.warn('[sync] gagal mengambil data server', error);
   } finally {
     pulling = false;
+    refreshSyncBadge();
   }
 }
 
 async function push({ initial = false } = {}) {
-  const key = adminKey();
-  if (!key || pushing) return;
+  if (!syncCredential() || pushing) return;
   clearTimeout(pushTimer);
   pushTimer = null;
   if (pulling) {
@@ -223,10 +314,7 @@ async function push({ initial = false } = {}) {
   try {
     const response = await fetch('/api/state', {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-key': key,
-      },
+      headers: getApiAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         state: sanitizeForServer(getState()),
         baseVersion: version,
@@ -244,6 +332,7 @@ async function push({ initial = false } = {}) {
     if (response.status === 409 && payload?.conflict) {
       version = Number(payload.version) || version;
       if (payload.state) applyServerState(payload.state);
+      else writeSyncMark();
       toast(
         'Data dari server baru saja diperbarui. Perubahan lokal terakhir mungkin perlu diulang.',
         'warning',
@@ -252,32 +341,40 @@ async function push({ initial = false } = {}) {
     }
 
     if (!response.ok) {
-      console.warn('[sync] gagal menyimpan state', payload);
+      if (response.status === 401 && getAuthToken()) {
+        handleAuthExpired();
+        toast('Sesi login berakhir. Silakan masuk kembali.', 'error');
+      } else {
+        console.warn('[sync] gagal menyimpan state', payload);
+      }
       return;
     }
 
     version = Number(payload.version) || version;
     ready = true;
+    writeSyncMark();
+    refreshSyncBadge();
   } catch (error) {
     console.warn('[sync] gagal mengirim state', error);
   } finally {
     pushing = false;
+    refreshSyncBadge();
   }
 }
 
 function schedulePush() {
   if (applying) return;
 
-  const key = adminKey();
-  if (key !== lastKey) {
-    lastKey = key;
+  const credential = syncCredential();
+  if (credential !== lastCredential) {
+    lastCredential = credential;
     ready = false;
     version = 0;
-    if (key) pull();
+    if (credential) pull();
     return;
   }
 
-  if (!key || !ready) return;
+  if (!credential || !ready) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => push(), 700);
 }
@@ -285,9 +382,20 @@ function schedulePush() {
 export function startSync() {
   if (started) return;
   started = true;
-  lastKey = adminKey();
+  lastCredential = syncCredential();
+
+  // The owner's original device may still rely on the legacy admin key. Seed
+  // the server account table once so every other device can log in normally.
+  if (!getAuthToken() && adminKey()) {
+    bootstrapAccounts().catch(() => {});
+  }
 
   unsubscribe = subscribe(schedulePush);
+
+  // Keep the local account directory in sync (roles, names, deactivations).
+  if (getAuthToken()) {
+    loadRemoteUsers().catch(() => {});
+  }
 
   window.addEventListener('focus', handleFocus);
   document.addEventListener('visibilitychange', handleFocus);
@@ -296,7 +404,8 @@ export function startSync() {
     if (document.visibilityState === 'visible') pull();
   }, POLL_INTERVAL);
 
-  if (lastKey) pull();
+  refreshSyncBadge();
+  if (lastCredential) pull();
 }
 
 export function stopSync() {
@@ -310,15 +419,16 @@ export function stopSync() {
   document.removeEventListener('visibilitychange', handleFocus);
   unsubscribe?.();
   unsubscribe = null;
+  refreshSyncBadge();
 }
 
 export function syncNow() {
-  if (adminKey()) pull();
+  if (syncCredential()) pull();
 }
 
 /** Make sure the shared state exists before creating a payment link. */
 export async function ensureSynced() {
-  if (!adminKey()) return false;
+  if (!syncCredential()) return false;
   if (!started) startSync();
 
   for (let attempt = 0; attempt < 4 && !ready; attempt += 1) {
@@ -341,10 +451,12 @@ export async function ensureSynced() {
 }
 
 export function getSyncState() {
+  const credential = syncCredential();
   return {
-    active: started && Boolean(adminKey()),
+    active: started && Boolean(credential),
     ready,
     version,
-    keySet: Boolean(adminKey()),
+    keySet: Boolean(credential),
+    mode: getAuthToken() ? 'login' : credential ? 'key' : 'none',
   };
 }

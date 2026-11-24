@@ -52,7 +52,7 @@ export function renderLogin() {
             </ul>
 
             <p class="relative text-[10px] text-stone-300 mt-8">
-              © ${new Date().getFullYear()} Casa Ramire · Data tersimpan di perangkat ini
+              © ${new Date().getFullYear()} Casa Ramire · Data tersinkron di semua perangkat
             </p>
           </div>
 
@@ -143,7 +143,7 @@ export function bindLogin(root) {
     });
   });
 
-  form.addEventListener('submit', (event) => {
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
     hideError();
 
@@ -157,7 +157,7 @@ export function bindLogin(root) {
     submit.disabled = true;
     submit.innerHTML = `${icon('Loader2', 'w-4 h-4 animate-spin')}<span>Memeriksa…</span>`;
 
-    const result = login(username, password);
+    const result = await login(username, password);
     if (!result.ok) {
       submit.disabled = false;
       submit.innerHTML = `${icon('LogIn', 'w-4 h-4')}<span>Masuk ke sistem</span>`;
@@ -167,6 +167,7 @@ export function bindLogin(root) {
     }
 
     toast(`Selamat datang, ${result.user.name.split(' ')[0]}!`);
+    if (result.warning) toast(result.warning, 'warning');
     // The store subscription in main.js swaps the screen.
   });
 }

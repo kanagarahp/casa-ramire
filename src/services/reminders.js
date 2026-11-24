@@ -1,28 +1,23 @@
 import { addDays, formatDate, rupiah, todayISO } from '../core/format.js';
 import { getState, update } from '../core/store.js';
 import { storage } from '../core/storage.js';
+import { getApiAuthHeaders, hasApiAuth } from './auth.js';
 import { sendBillingEmail } from './email.js';
 import { getSettings } from './settings.js';
 
 const LAST_RUN_KEY = 'casa-ramire:last-billing-reminder';
 
-function adminKey() {
-  return String(getSettings().catalogAdminKey || '').trim();
-}
-
 async function runOnServer() {
-  const key = adminKey();
-  if (!key) return null;
+  if (!hasApiAuth()) return null;
 
   let response;
   try {
     response = await fetch('/api/cron/billing-reminders', {
       method: 'POST',
-      headers: {
+      headers: getApiAuthHeaders({
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        'x-admin-key': key,
-      },
+      }),
       body: JSON.stringify({}),
     });
   } catch {

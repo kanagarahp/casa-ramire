@@ -59,7 +59,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
 
     let body;
     try {
@@ -108,7 +108,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     const id = photoId(req);
     if (!validId(id)) return sendJson(res, 400, { error: 'ID foto tidak valid.' });
 

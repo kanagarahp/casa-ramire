@@ -35,7 +35,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     try {
       const row = await currentRow();
       if (!row) return sendJson(res, 200, { exists: false, version: 0 });
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'PUT') {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
 
     let body;
     try {
@@ -132,7 +132,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    if (!requireAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
     try {
       await query('delete from casa_state where id = $1', [STATE_ID]);
       return sendJson(res, 200, { ok: true });

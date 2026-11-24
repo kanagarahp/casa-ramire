@@ -1,5 +1,6 @@
 import { todayISO } from '../core/format.js';
 import { getState, update } from '../core/store.js';
+import { getApiAuthHeaders, hasApiAuth } from './auth.js';
 import { isDateBlocked } from './daily-calendar.js';
 import { getCarParkingStatus } from './parking.js';
 import { getFacilities, getParkingCapacity } from './settings.js';
@@ -104,13 +105,10 @@ export function buildCatalogSnapshot({ includeLocalPhotos = false } = {}) {
   };
 }
 
-async function uploadCatalogPhoto(adminKey, dataUrl) {
+async function uploadCatalogPhoto(dataUrl) {
   const response = await fetch('/api/catalog/photo', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-key': adminKey,
-    },
+    headers: getApiAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ dataUrl }),
   });
 
@@ -132,10 +130,9 @@ async function uploadCatalogPhoto(adminKey, dataUrl) {
  * Upload every local room photo that has not been published yet, then publish
  * a clean snapshot of the catalog to the public API.
  */
-export async function publishCatalog({ adminKey, onProgress } = {}) {
-  const key = String(adminKey || '').trim();
-  if (!key) {
-    throw new Error('Kunci publikasi katalog belum diisi di Pengaturan.');
+export async function publishCatalog({ onProgress } = {}) {
+  if (!hasApiAuth()) {
+    throw new Error('Sesi login tidak valid. Silakan masuk kembali.');
   }
 
   const state = getState();
@@ -168,7 +165,7 @@ export async function publishCatalog({ adminKey, onProgress } = {}) {
       total: pending.length,
       label: item.label,
     });
-    const url = await uploadCatalogPhoto(key, item.photo);
+    const url = await uploadCatalogPhoto(item.photo);
     uploaded.push({ ...item, url });
   }
 
@@ -201,10 +198,7 @@ export async function publishCatalog({ adminKey, onProgress } = {}) {
   const catalog = buildCatalogSnapshot();
   const response = await fetch('/api/catalog', {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-admin-key': key,
-    },
+    headers: getApiAuthHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ catalog }),
   });
 
