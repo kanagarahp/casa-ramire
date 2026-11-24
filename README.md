@@ -434,6 +434,15 @@ Pekerjaan POS/kasir, email tagihan tanpa DOKU, dan penyederhanaan
 ketersediaan landing page 2 November 2026 ada di
 [`docs/HANDOFF-2026-11-02.md`](docs/HANDOFF-2026-11-02.md).
 
+Pekerjaan deposit, booking harian, parkir, dan kalender VIP 10 November 2026
+ada di [`docs/HANDOFF-2026-11-10.md`](docs/HANDOFF-2026-11-10.md).
+
+Pekerjaan login lintas perangkat, invoice PDF, preview/kirim invoice, email
+otomatis, dan logo invoice 24 November 2026 ada di
+[`docs/HANDOFF-2026-11-24.md`](docs/HANDOFF-2026-11-24.md). Draft teks email
+invoice ada di
+[`docs/INVOICE-EMAIL-DRAFTS.md`](docs/INVOICE-EMAIL-DRAFTS.md).
+
 ## Lisensi
 
 Hak cipta © Casa Ramire. Digunakan untuk keperluan internal properti.
