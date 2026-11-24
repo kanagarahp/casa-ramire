@@ -627,6 +627,22 @@ export async function buildInvoicePdf(invoice) {
       color: COLORS.green,
       align: 'center',
     });
+  } else {
+    page.drawRectangle({
+      x: right - 72,
+      y: y - 3,
+      width: 72,
+      height: 17,
+      color: rgb(1, 0.98, 0.92),
+    });
+    drawText('BELUM DIBAYAR', {
+      x: right - 36,
+      y: y + 1,
+      size: 6.4,
+      useBold: true,
+      color: rgb(0.71, 0.33, 0.04),
+      align: 'center',
+    });
   }
 
   y -= 22;
