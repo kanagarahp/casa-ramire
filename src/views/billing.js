@@ -14,6 +14,7 @@ import {
 import { getState } from '../core/store.js';
 import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { sendBillByEmail } from '../services/billing-notify.js';
+import { openInvoicePreview } from '../services/invoice.js';
 import { isDokuEnabled } from '../services/settings.js';
 import { buildMessage } from '../services/templates.js';
 import {
@@ -90,6 +91,7 @@ function billRow(bill) {
           ${
             bill.status === 'unpaid'
               ? `
+                <button type="button" class="btn-outline btn-xs" data-action="invoice" data-id="${bill.id}" title="Tampilkan invoice">${icon('FileText', 'w-3 h-3')} Invoice</button>
                 ${doku ? `<button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bill.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>` : ''}
                 <button type="button" class="btn-outline btn-xs" data-action="email-bill" data-id="${bill.id}" ${email ? '' : 'disabled title="Email penghuni belum diisi"'}>${icon('Send', 'w-3 h-3')} Kirim Tagihan</button>
                 <button type="button" class="btn-primary btn-xs" data-action="verify" data-id="${bill.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
@@ -101,6 +103,7 @@ function billRow(bill) {
                 <button type="button" class="btn-ghost btn-xs text-rose-600" data-action="delete" data-id="${bill.id}" title="Hapus tagihan">${icon('Trash2', 'w-3.5 h-3.5')}</button>
               `
               : `
+                <button type="button" class="btn-outline btn-xs" data-action="invoice" data-id="${bill.id}" title="Tampilkan invoice">${icon('FileText', 'w-3 h-3')} Invoice</button>
                 <button type="button" class="btn-outline btn-xs" data-action="unverify" data-id="${bill.id}">Batalkan</button>
                 <button type="button" class="btn-ghost btn-xs text-rose-600" data-action="delete" data-id="${bill.id}" title="Hapus tagihan">${icon('Trash2', 'w-3.5 h-3.5')}</button>
               `
@@ -287,6 +290,11 @@ export function render(root) {
 
     if (action === 'add-invoice') {
       openManualInvoiceModal();
+      return;
+    }
+
+    if (action === 'invoice') {
+      openInvoicePreview({ type: 'bill', id });
       return;
     }
 

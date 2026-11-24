@@ -40,10 +40,14 @@ function dueRecord(record) {
 }
 
 async function runLocally() {
-  const target = addDays(todayISO(), 7);
+  const target = addDays(todayISO(), 3);
   const state = getState();
   const bills = (state.bills || []).filter(
-    (bill) => dueRecord(bill) && String(bill.dueDate || '').slice(0, 10) === target && !bill.reminder7SentAt,
+    (bill) =>
+      dueRecord(bill) &&
+      (String(bill.dueDate || '').slice(0, 10) === target ||
+        String(bill.periodEnd || '').slice(0, 10) === target) &&
+      !bill.reminder7SentAt,
   );
   const invoices = (state.manualInvoices || []).filter(
     (invoice) =>
@@ -140,7 +144,7 @@ async function runLocally() {
 }
 
 /**
- * Send H-7 reminders. On production the server cron endpoint de-duplicates
+ * Send H-3 reminders. On production the server cron endpoint de-duplicates
  * across devices; local Vite development falls back to this browser.
  */
 export async function runBillingReminders({ force = false, silent = true } = {}) {
@@ -157,10 +161,10 @@ export async function runBillingReminders({ force = false, silent = true } = {})
     if (result.sent > 0) {
       // Dynamic import avoids creating a dependency cycle with UI toast.
       const { toast } = await import('../ui/toast.js');
-      toast(`${result.sent} pengingat tagihan H-7 dikirim.`);
+      toast(`${result.sent} pengingat tagihan H-3 dikirim.`);
     } else if (result.checked === 0) {
       const { toast } = await import('../ui/toast.js');
-      toast('Tidak ada tagihan yang jatuh tempo 7 hari lagi.', 'warning');
+      toast('Tidak ada tagihan yang jatuh tempo 3 hari lagi.', 'warning');
     }
   }
 

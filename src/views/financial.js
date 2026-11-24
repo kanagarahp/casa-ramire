@@ -25,6 +25,7 @@ import { getAccrualReport, getProfitLoss } from '../services/reports.js';
 import { getDepositAccounts, getDepositSummary } from '../services/deposit.js';
 import { getLedgerCategories, getLedgerEntries, getLedgerSummary } from '../services/ledger.js';
 import { sendInvoiceByEmail } from '../services/billing-notify.js';
+import { openInvoicePreview } from '../services/invoice.js';
 import { createInvoicePaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { isDokuEnabled } from '../services/settings.js';
 import { isOwner } from '../services/auth.js';
@@ -189,10 +190,12 @@ function invoicesSection() {
                               <div class="flex flex-wrap items-center justify-end gap-1">
                                 ${
                                   invoice.status === 'unpaid'
-                                    ? `${doku ? `<button type="button" class="btn-outline btn-xs" data-action="doku-invoice-link" data-id="${invoice.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>` : ''}
-                                       <button type="button" class="btn-outline btn-xs" data-action="email-invoice" data-id="${invoice.id}" ${email ? '' : 'disabled title="Email belum diisi"'}>${icon('Send', 'w-3 h-3')} Kirim Tagihan</button>
+                                    ? `<button type="button" class="btn-outline btn-xs" data-action="invoice" data-id="${invoice.id}" title="Tampilkan invoice">${icon('FileText', 'w-3 h-3')} Invoice</button>
+                                       ${doku ? `<button type="button" class="btn-outline btn-xs" data-action="doku-invoice-link" data-id="${invoice.id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>` : ''}
+                                       <button type="button" class="btn-outline btn-xs" data-action="email-invoice" data-id="${invoice.id}" ${email ? '' : 'disabled title="Email belum diisi"'}>${icon('Send', 'w-3 h-3')} Kirim Invoice</button>
                                        <button type="button" class="btn-primary btn-xs" data-action="verify-invoice" data-id="${invoice.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>`
-                                    : `<button type="button" class="btn-outline btn-xs" data-action="unverify-invoice" data-id="${invoice.id}">Batalkan</button>`
+                                    : `<button type="button" class="btn-outline btn-xs" data-action="invoice" data-id="${invoice.id}" title="Tampilkan invoice">${icon('FileText', 'w-3 h-3')} Invoice</button>
+                                       <button type="button" class="btn-outline btn-xs" data-action="unverify-invoice" data-id="${invoice.id}">Batalkan</button>`
                                 }
                                 ${
                                   invoice.phone
@@ -643,6 +646,11 @@ export function render(root) {
       } catch (error) {
         toast(error.message, 'error');
       }
+      return;
+    }
+
+    if (action === 'invoice') {
+      openInvoicePreview({ type: 'invoice', id });
       return;
     }
 

@@ -2,10 +2,17 @@ import { ensureCatalogSchema, query } from '../_lib/db.js';
 import {
   emailConfigured,
   notificationEmail,
-  renderBillingEmail,
   sendResendEmail,
 } from '../_lib/email.js';
 import { methodNotAllowed, requireAdmin, sendJson } from '../_lib/http.js';
+import {
+  buildInvoiceEmail,
+  buildInvoicePdf,
+  invoiceFilename,
+  invoicePdfBase64,
+  invoiceRecipient,
+  normalizeInvoice,
+} from '../_lib/invoice.js';
 
 const STATE_ID = 'public';
 
@@ -33,47 +40,52 @@ async function isAuthorized(req, res) {
   return requireAdmin(req, res);
 }
 
-async function sendReminder({
-  kind,
-  record,
-  propertyName,
-  paymentInstructions,
-  bankName,
-  bankAccountNumber,
-  bankAccountName,
-}) {
-  const recipient = String(record.email || '').trim().toLowerCase();
-  const admin = notificationEmail();
-  const outstanding = Math.max(0, toNumber(record.amount) - toNumber(record.paid));
-  const isInvoice = kind === 'invoice';
-  const title = isInvoice
-    ? `Pengingat Invoice ${record.item || 'Layanan'}`
-    : `Pengingat Tagihan ${record.type || 'Sewa'} Kamar ${record.roomNumber || '—'}`;
-  const content = renderBillingEmail({
-    title,
-    invoiceNumber: record.number || '',
-    amount: outstanding,
-    dueDate: record.dueDate,
-    description: record.description || record.item || '',
-    name: record.tenantName || 'Kak',
-    roomNumber: record.roomNumber || '',
-    propertyName,
-    paymentInstructions,
-    bankName,
-    bankAccountNumber,
-    bankAccountName,
+async function sendReminder({ kind, record, state }) {
+  const invoice = normalizeInvoice(state, {
+    type: kind === 'invoice' ? 'invoice' : 'bill',
+    id: record.id,
   });
+  if (!invoice) {
+    return { sent: false, reason: 'invoice-not-found' };
+  }
 
+  // For an unpaid rent bill whose lease period ends in 3 days, use the lease
+  // end date as the reference date so the reminder is not confusing.
+  if (
+    kind === 'bill' &&
+    String(record.periodEnd || '').slice(0, 10) === addDays(todayISO(), 3)
+  ) {
+    invoice.dueDate = record.periodEnd;
+  }
+
+  const recipient = invoiceRecipient(invoice);
   if (!recipient) {
     return { sent: false, reason: 'missing-email' };
   }
 
-  await sendResendEmail({ to: recipient, subject: content.subject, text: content.text });
+  const pdf = await buildInvoicePdf(invoice);
+  const content = buildInvoiceEmail(invoice, { mode: 'reminder' });
+  const attachment = {
+    filename: invoiceFilename(invoice),
+    content: invoicePdfBase64(pdf),
+  };
+
+  await sendResendEmail({
+    to: recipient,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+    attachments: [attachment],
+  });
+
+  const admin = notificationEmail();
   if (admin && admin !== recipient) {
     await sendResendEmail({
       to: admin,
       subject: `[Salinan Admin] ${content.subject}`,
       text: content.text,
+      html: content.html,
+      attachments: [attachment],
     }).catch((error) => console.warn('[reminders] salinan admin gagal', error.message));
   }
   return { sent: true, recipient };
@@ -113,23 +125,16 @@ export default async function handler(req, res) {
     }
     const raw = result.rows[0].data;
     const state = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    const targetDate = addDays(todayISO(), 7);
-    const propertyName = String(state?.settings?.propertyName || 'Casa Ramire');
-    const paymentInstructions = String(state?.settings?.paymentInstructions || '');
-    const bankName = String(state?.settings?.bankName || 'Bank Mandiri');
-    const bankAccountNumber = String(
-      state?.settings?.bankAccountNumber || '700013745877',
-    );
-    const bankAccountName = String(
-      state?.settings?.bankAccountName || 'ERNY KURNIAWATI',
-    );
+    const targetDate = addDays(todayISO(), 3);
 
-    const bills = (state.bills || []).filter(
-      (bill) =>
-        bill.status === 'unpaid' &&
-        toNumber(bill.amount) - toNumber(bill.paid) > 0 &&
-        String(bill.dueDate || '').slice(0, 10) === targetDate,
-    );
+    const bills = (state.bills || []).filter((bill) => {
+      if (bill.status !== 'unpaid') return false;
+      if (toNumber(bill.amount) - toNumber(bill.paid) <= 0) return false;
+      const dueSoon = String(bill.dueDate || '').slice(0, 10) === targetDate;
+      const leaseEndsSoon =
+        String(bill.periodEnd || '').slice(0, 10) === targetDate;
+      return dueSoon || leaseEndsSoon;
+    });
     const invoices = (state.manualInvoices || []).filter(
       (invoice) =>
         invoice.status === 'unpaid' &&
@@ -156,21 +161,13 @@ export default async function handler(req, res) {
       ['invoice', invoices],
     ]) {
       for (const record of records) {
-        const reminderId = `${kind}:${record.id}:h7:${targetDate}`;
+        const reminderId = `${kind}:${record.id}:h3:${targetDate}`;
         if (existing.has(reminderId)) {
           skipped += 1;
           continue;
         }
         try {
-          const outcome = await sendReminder({
-            kind,
-            record,
-            propertyName,
-            paymentInstructions,
-            bankName,
-            bankAccountNumber,
-            bankAccountName,
-          });
+          const outcome = await sendReminder({ kind, record, state });
           if (!outcome.sent) {
             failed += 1;
             details.push({ kind, id: record.id, reason: outcome.reason });

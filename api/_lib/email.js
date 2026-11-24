@@ -29,13 +29,14 @@ function rupiah(value) {
   return `Rp${Math.round(Number(value) || 0).toLocaleString('id-ID')}`;
 }
 
-export async function sendResendEmail({ to, subject, text, html }) {
+export async function sendResendEmail({ to, subject, text, html, attachments = [] }) {
   const apiKey = String(process.env.RESEND_API_KEY || '').trim();
   if (!apiKey) {
     const error = new Error(
       'Pengiriman email belum dikonfigurasi. Tambahkan RESEND_API_KEY di environment Vercel.',
     );
     error.code = 'EMAIL_NOT_CONFIGURED';
+    error.status = 503;
     throw error;
   }
 
@@ -57,6 +58,17 @@ export async function sendResendEmail({ to, subject, text, html }) {
       subject: String(subject || '').slice(0, 200),
       ...(text ? { text: String(text).slice(0, 40_000) } : {}),
       ...(html ? { html: String(html).slice(0, 80_000) } : {}),
+      ...(Array.isArray(attachments) && attachments.length
+        ? {
+            attachments: attachments
+              .filter((item) => item?.filename && item?.content)
+              .slice(0, 5)
+              .map((item) => ({
+                filename: String(item.filename).slice(0, 160),
+                content: String(item.content),
+              })),
+          }
+        : {}),
       reply_to: String(process.env.EMAIL_REPLY_TO || notificationEmail()),
     }),
     signal: AbortSignal.timeout(20_000),

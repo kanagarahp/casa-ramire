@@ -10,8 +10,9 @@ import {
   updateTenant,
 } from '../services/property.js';
 import { getDepositAccount } from '../services/deposit.js';
+import { openInvoicePreview } from '../services/invoice.js';
 import { avatar, billBadge } from '../ui/components.js';
-import { esc } from '../ui/dom.js';
+import { delegate, esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
@@ -59,6 +60,8 @@ export function openTenantDetail(tenantId) {
       amount: bill.status === 'paid' ? bill.paid : bill.amount,
       status: bill.status,
       note: bill.status === 'paid' ? bill.method : 'Belum dibayar',
+      invoiceType: 'bill',
+      invoiceId: bill.id,
     })),
     ...invoices.map((invoice) => ({
       key: `invoice-${invoice.id}`,
@@ -67,6 +70,8 @@ export function openTenantDetail(tenantId) {
       amount: invoice.status === 'paid' ? invoice.paid : invoice.amount,
       status: invoice.status,
       note: invoice.status === 'paid' ? invoice.method : 'Belum dibayar',
+      invoiceType: 'invoice',
+      invoiceId: invoice.id,
     })),
   ];
   const billedRows = [...payments];
@@ -79,6 +84,8 @@ export function openTenantDetail(tenantId) {
       amount: payment.amount,
       status: 'paid',
       note: [payment.method, payment.note].filter(Boolean).join(' · '),
+      invoiceType: payment.billId ? 'bill' : payment.invoiceId ? 'invoice' : '',
+      invoiceId: payment.billId || payment.invoiceId || '',
     }));
 
   if (paymentRows.length) {
@@ -286,7 +293,7 @@ export function openTenantDetail(tenantId) {
 
         <div class="overflow-x-auto rounded-2xl border border-line">
           <table class="data-table">
-            <thead><tr><th>Item</th><th>Tanggal</th><th>Nominal</th><th>Status</th></tr></thead>
+            <thead><tr><th>Item</th><th>Tanggal</th><th>Nominal</th><th>Status</th><th class="text-right">Aksi</th></tr></thead>
             <tbody>
               ${
                 payments.length
@@ -298,10 +305,17 @@ export function openTenantDetail(tenantId) {
                           <td class="whitespace-nowrap">${formatDateTime(payment.date)}</td>
                           <td class="font-bold ${payment.status === 'paid' ? 'text-stone-800' : 'text-rose-700'}">${rupiah(payment.amount)}</td>
                           <td>${billBadge(payment.status)}</td>
+                          <td class="text-right">
+                            ${
+                              payment.invoiceType && payment.invoiceId
+                                ? `<button type="button" class="btn-outline btn-xs" data-invoice data-invoice-type="${payment.invoiceType}" data-invoice-id="${payment.invoiceId}">${icon('FileText', 'w-3 h-3')} Invoice</button>`
+                                : ''
+                            }
+                          </td>
                         </tr>`,
                       )
                       .join('')
-                  : `<tr><td colspan="4" class="text-center py-8 text-stone-600">Belum ada riwayat pembayaran.</td></tr>`
+                  : `<tr><td colspan="5" class="text-center py-8 text-stone-600">Belum ada riwayat pembayaran.</td></tr>`
               }
             </tbody>
           </table>
@@ -347,6 +361,12 @@ export function openTenantDetail(tenantId) {
             item.className = `${active ? 'bg-brand text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'} px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5`;
           });
         });
+      });
+
+      delegate(el, 'click', '[data-invoice]', (event, target) => {
+        const type = target.dataset.invoiceType;
+        const id = target.dataset.invoiceId;
+        if (type && id) openInvoicePreview({ type, id });
       });
 
       el.querySelector('[data-action="save"]')?.addEventListener('click', () => {

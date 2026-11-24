@@ -19,7 +19,7 @@ tablet melihat data yang sama setelah login. Data juga tetap di-cache di
 | **Booking Harian** | Kamar 101 Deluxe VIP lantai 1 khusus harian + kamar bulanan kosong lantai 2/3 yang bisa dipakai harian. Owner dapat mengatur ketersediaan dan harga kamar VIP per tanggal (weekend/peak season) lewat menu **Atur Kamar VIP**. |
 | **Pindah Kamar** | Pindahkan booking (sebelum check-in) atau penghuni aktif ke kamar lain tanpa menghapus data. Harga dihitung ulang mengikuti kamar tujuan. |
 | **Parkir Mobil** | Kapasitas maksimal 15 mobil (bisa diubah owner). Booking online diblokir saat penuh; admin/owner masih bisa menambahkan dengan peringatan overbook. |
-| **Notifikasi Email** | Booking online, tagihan POS/manual, pengingat H-7 otomatis, serta konfirmasi pembayaran/DP dikirim ke email penghuni dan inbox admin `casaramirejogja@gmail.com`. |
+| **Notifikasi Email** | Booking online, tagihan POS/manual, pengingat H-3 otomatis (dengan PDF invoice), serta konfirmasi pembayaran/DP dikirim ke email penghuni dan inbox admin `casaramirejogja@gmail.com`. |
 | **Dashboard** | KPI okupansi, antrean check-in, **Akan Berakhir** (≤ 7 hari), **Menunggak** (tagihan lewat jatuh tempo + lama tunggakan), arus kas 6 bulan, okupansi per lantai, tagihan aktif |
 | **Galeri Landing** | Unggah, ganti, hapus, dan urutkan foto galeri landing page; publikasi otomatis ke CDN foto katalog |
 | **Status Kamar** | 42 kamar (201–221, 301–321), filter lantai/status, pencarian, tampilan grid/daftar, tambah/hapus kamar, unggah foto kamar |
@@ -30,9 +30,10 @@ tablet melihat data yang sama setelah login. Data juga tetap di-cache di
 | **Penghuni** | Direktori, biodata + email, kontak darurat, **lama tinggal sejak check-in**, riwayat kamar/pindah, riwayat pembayaran + pembayaran terakhir, tunggakan |
 | **Financial** | **Buku kas** semua transaksi, **deposit/jaminan**, jurnal pengeluaran + kategori, invoice layanan untuk **tenant/non-tenant**, pendapatan POS, pendapatan accrual, laba rugi |
 | **Sewa & Kas** | Daftar tagihan, filter status, verifikasi/batal verifikasi pembayaran, pengingat WhatsApp, **kirim tagihan ke email penghuni** |
-| **Pembayaran Transfer** | Info rekening Bank Mandiri (ERNY KURNIAWATI — 700013745877) tampil di landing page, email booking, tagihan, dan pengingat H-7. Pembayaran diverifikasi manual oleh admin. |
+| **Pembayaran Transfer** | Info rekening Bank Mandiri (ERNY KURNIAWATI - 700013745877) tampil di landing page, email booking, tagihan, dan pengingat H-3. Pembayaran diverifikasi manual oleh admin. |
 | **Pembayaran DOKU** | Opsional dan nonaktif secara default. Jika diaktifkan: link pembayaran per tagihan/invoice/perpanjangan, status lunas otomatis lewat webhook |
 | **Email Tagihan** | Kirim rincian tagihan/invoice ke email penghuni melalui Resend tanpa perlu link DOKU, dengan fallback ke aplikasi email perangkat |
+| **Invoice PDF** | Preview invoice layanan/POS/tagihan sewa, unduh PDF, cetak, dan kirim email; PDF otomatis dilampirkan pada pengingat H-3 dan ucapan terima kasih setelah pembayaran diverifikasi |
 | **Sinkronisasi** | State operasional dibagikan lewat `/api/state` agar status pembayaran dari webhook langsung terlihat di dashboard |
 | **Konten WA** | Editor template tagihan, invoice, pengingat; preview WhatsApp; variabel otomatis |
 | **Akun** | Manajemen pengguna khusus owner, role owner/staf, reset password, aktif/nonaktif |
@@ -138,6 +139,8 @@ GET  /api/catalog               # snapshot galeri/profil/pricelist
 GET  /api/availability          # hitungan kamar live (tanpa data pribadi)
 POST /api/bookings              # kirim booking dari landing page
 GET/PATCH /api/bookings         # daftar & status booking (butuh login)
+GET  /api/invoice               # unduh PDF invoice (?type=bill|invoice|pos&id=...)
+POST /api/invoice               # kirim invoice PDF + ucapan terima kasih
 
 POST /api/auth/login            # login username/password -> token
 GET  /api/auth/users            # direktori akun (butuh login)

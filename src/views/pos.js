@@ -2,9 +2,8 @@ import { PAYMENT_METHODS } from '../core/constants.js';
 import { addDays, formatDate, formatDateTime, rupiah, toNumber, todayISO } from '../core/format.js';
 import { getState } from '../core/store.js';
 import { isOwner } from '../services/auth.js';
-import { sendInvoiceByEmail } from '../services/billing-notify.js';
 import { isValidEmail } from '../services/email.js';
-import { notifyPosPayment } from '../services/notifications.js';
+import { openInvoicePreview, sendPaidInvoiceEmail } from '../services/invoice.js';
 import {
   createPosSale,
   deletePosProduct,
@@ -23,7 +22,7 @@ import { delegate, esc } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { confirmAction, openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
-import { openInvoiceIssuedModal, openVerifyModal } from './billing-modals.js';
+import { openVerifyModal } from './billing-modals.js';
 
 let activeTab = 'kasir';
 let searchTerm = '';
@@ -411,7 +410,7 @@ function kasirHtml() {
             <label class="flex items-start gap-2.5 rounded-xl border border-line bg-white p-2.5 cursor-pointer ${hasEmail ? '' : 'opacity-60'}">
               <input id="pos-send-email" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" ${draft.sendEmail && hasEmail ? 'checked' : ''} ${hasEmail ? '' : 'disabled'} />
               <span>
-                <span class="block text-[11px] font-bold text-stone-700">Kirim invoice ke email pelanggan</span>
+                <span class="block text-[11px] font-bold text-stone-700">Kirim invoice &amp; ucapan terima kasih ke email</span>
                 <span class="block text-[10px] text-stone-500 mt-0.5" id="pos-email-hint">${hasEmail ? esc(knownEmail) : 'Email belum tersedia. Lengkapi dulu di profil penghuni atau isi email non tenant.'}</span>
               </span>
             </label>
@@ -535,6 +534,7 @@ function historyHtml() {
                                     ? `<button type="button" class="btn-primary btn-xs" data-pos-verify data-invoice="${sale.invoiceId}">${icon('ShieldCheck', 'w-3 h-3')} Tandai Lunas</button>`
                                     : ''
                                 }
+                                <button type="button" class="btn-ghost btn-xs" data-pos-invoice data-sale="${sale.id}" title="Tampilkan invoice">${icon('FileText', 'w-3.5 h-3.5')}</button>
                                 <button type="button" class="btn-ghost btn-xs" data-pos-detail data-sale="${sale.id}" title="Lihat struk">${icon('ReceiptText', 'w-3.5 h-3.5')}</button>
                                 ${owner ? `<button type="button" class="btn-ghost btn-xs text-rose-600" data-pos-delete-sale data-sale="${sale.id}" title="Hapus transaksi">${icon('Trash2', 'w-3.5 h-3.5')}</button>` : ''}
                               </div>
@@ -734,10 +734,14 @@ function openReceipt(sale, { fresh = false } = {}) {
     `,
     footer: `
       <button type="button" class="btn-outline btn-sm" data-modal-close>Tutup</button>
+      <button type="button" class="btn-outline btn-sm" data-pos-invoice-open>${icon('FileText', 'w-4 h-4')} Tampilkan Invoice</button>
       <button type="button" class="btn-primary btn-sm" data-print-receipt>${icon('Printer', 'w-4 h-4')} Cetak Struk</button>
     `,
     onMount(el) {
       el.querySelector('[data-print-receipt]')?.addEventListener('click', () => printReceipt(sale));
+      el.querySelector('[data-pos-invoice-open]')?.addEventListener('click', () => {
+        openInvoicePreview({ type: 'pos', id: sale.id });
+      });
     },
   });
 }
@@ -1119,8 +1123,8 @@ export function render(root) {
         openReceipt(sale, { fresh: true });
         toast('Pembayaran POS berhasil disimpan.');
       } else if (sale.invoice) {
-        openInvoiceIssuedModal(sale.invoice);
-        toast('Invoice POS berhasil diterbitkan.');
+        openInvoicePreview({ type: 'invoice', id: sale.invoice.id });
+        toast('Invoice POS berhasil diterbitkan. Preview terbuka untuk dicetak atau dikirim.');
       } else {
         openReceipt(sale, { fresh: true });
         toast('Invoice POS berhasil diterbitkan.');
@@ -1128,29 +1132,16 @@ export function render(root) {
 
       if (shouldEmail && isPaid) {
         try {
-          const result = await notifyPosPayment({ sale, email });
+          const result = await sendPaidInvoiceEmail({ type: 'pos', id: sale.id });
           toast(
-            result.sent
-              ? `Konfirmasi pembayaran dikirim ke ${email}.`
-              : 'Pembayaran tersimpan, tetapi email konfirmasi belum terkirim.',
-            result.sent ? 'success' : 'warning',
+            `Ucapan terima kasih dan invoice PDF dikirim ke ${result.to || email}.`,
+            'success',
           );
         } catch (error) {
-          toast(`Pembayaran tersimpan, email gagal dikirim: ${error.message}`, 'warning');
-        }
-      }
-
-      if (shouldEmail && sale.invoice) {
-        try {
-          const { delivery } = await sendInvoiceByEmail(sale.invoice);
           toast(
-            delivery.sent
-              ? `Invoice dikirim ke ${email}.`
-              : 'Email belum dikonfigurasi. Aplikasi email perangkat dibuka sebagai gantinya.',
-            delivery.sent ? 'success' : 'warning',
+            `Pembayaran tersimpan, email invoice gagal dikirim: ${error.message}`,
+            'warning',
           );
-        } catch (error) {
-          toast(`Invoice tersimpan, tetapi email gagal dikirim: ${error.message}`, 'error');
         }
       }
     } catch (error) {
@@ -1160,6 +1151,11 @@ export function render(root) {
 
   delegate(scope, 'click', '[data-pos-manage]', () => {
     openProductManager();
+  });
+
+  delegate(scope, 'click', '[data-pos-invoice]', (event, target) => {
+    const sale = getPosSales().find((item) => String(item.id) === String(target.dataset.sale));
+    if (sale) openInvoicePreview({ type: 'pos', id: sale.id });
   });
 
   delegate(scope, 'click', '[data-pos-detail]', (event, target) => {

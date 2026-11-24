@@ -3,7 +3,7 @@ import { addDays, formatDate, rupiah, toNumber, todayISO } from '../core/format.
 import { getState } from '../core/store.js';
 import { createBill, createManualInvoice, getBill, getManualInvoice, verifyBill, verifyManualInvoice } from '../services/billing.js';
 import { sendBillByEmail, sendInvoiceByEmail } from '../services/billing-notify.js';
-import { notifyPaymentConfirmed } from '../services/notifications.js';
+import { openInvoicePreview, sendPaidInvoiceEmail } from '../services/invoice.js';
 import { createInvoicePaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { isDokuEnabled } from '../services/settings.js';
 import { getTenants } from '../services/property.js';
@@ -81,11 +81,23 @@ export function openVerifyModal({ kind = 'bill', id }) {
           else verifyBill(id, { method, note });
           toast('Pembayaran berhasil diverifikasi.');
           const updated = kind === 'invoice' ? getManualInvoice(id) : getBill(id);
-          const result = await notifyPaymentConfirmed({ kind, record: updated, method, note });
-          if (!result.sent) {
-            toast('Pembayaran tersimpan, tetapi email konfirmasi belum terkirim. Periksa konfigurasi email.', 'warning');
+          const invoiceType = kind === 'invoice' ? 'invoice' : 'bill';
+          let sentTo = '';
+          try {
+            const sent = await sendPaidInvoiceEmail({ type: invoiceType, id: updated.id });
+            sentTo = sent.to || '';
+            toast(
+              `Ucapan terima kasih dan invoice PDF dikirim ke ${sentTo}.`,
+              'success',
+            );
+          } catch (error) {
+            toast(
+              `Pembayaran tersimpan, email invoice belum terkirim: ${error.message}`,
+              'warning',
+            );
           }
           close();
+          openInvoicePreview({ type: invoiceType, id: updated.id, sentTo });
         } catch (error) {
           toast(error.message, 'error');
         } finally {
@@ -275,13 +287,10 @@ export function openManualInvoiceModal(preselectedRoomId = '') {
             <input id="iv-due" type="date" class="input" value="${todayISO()}" />
           </div>
         </div>
-        <label class="flex items-start gap-2.5 rounded-xl border border-line bg-cream/60 p-3 cursor-pointer">
-          <input id="iv-send-email" type="checkbox" class="w-4 h-4 accent-brand mt-0.5" checked />
-          <span>
-            <span class="block text-xs font-bold text-stone-700">Kirim invoice ke email penerima</span>
-            <span class="block text-[10px] text-stone-500 mt-0.5">Salinan juga dikirim ke email admin default.</span>
-          </span>
-        </label>
+        <div class="rounded-xl border border-line bg-cream/60 p-3 text-[11px] text-stone-600 leading-relaxed">
+          Setelah diterbitkan, <b>preview invoice</b> akan terbuka. Anda bisa memeriksa tampilan,
+          mengunduh PDF, mencetak, atau mengirim email dari halaman preview.
+        </div>
       </form>
     `,
     footer: `
@@ -334,21 +343,11 @@ export function openManualInvoiceModal(preselectedRoomId = '') {
             dueDate: el.querySelector('#iv-due').value || todayISO(),
           });
           toast('Invoice manual berhasil diterbitkan.');
-          if (el.querySelector('#iv-send-email').checked) {
-            try {
-              const { delivery } = await sendInvoiceByEmail(invoice);
-              toast(
-                delivery.sent
-                  ? `Invoice dikirim ke ${invoice.email || 'email penerima'}.`
-                  : 'Email belum dikonfigurasi. Invoice tetap tersimpan.',
-                delivery.sent ? 'success' : 'warning',
-              );
-            } catch (error) {
-              toast(`Invoice tersimpan, email gagal dikirim: ${error.message}`, 'warning');
-            }
-          }
           close();
-          setTimeout(() => openInvoiceIssuedModal(invoice), 0);
+          setTimeout(
+            () => openInvoicePreview({ type: 'invoice', id: invoice.id }),
+            0,
+          );
         } catch (error) {
           toast(error.message, 'error');
         }
@@ -394,10 +393,15 @@ export function openInvoiceIssuedModal(invoice) {
     `,
     footer: `
       <button type="button" class="btn-outline btn-sm" data-modal-close>Tutup</button>
+      <button type="button" class="btn-outline btn-sm" data-preview>${icon('FileText', 'w-4 h-4')} Tampilkan Invoice</button>
       ${doku ? `<button type="button" class="btn-outline btn-sm" data-doku>${icon('CreditCard', 'w-4 h-4')} Buat Link DOKU</button>` : ''}
       <button type="button" class="btn-primary btn-sm" data-send ${invoice.email ? '' : 'disabled title="Email penerima belum diisi"'}>${icon('Send', 'w-4 h-4')} Kirim Tagihan</button>
     `,
     onMount(el, close) {
+      el.querySelector('[data-preview]')?.addEventListener('click', () => {
+        close();
+        openInvoicePreview({ type: 'invoice', id: invoice.id });
+      });
       el.querySelector('[data-doku]')?.addEventListener('click', async (event) => {
         if (!isDokuEnabled()) {
           toast('Link DOKU belum diaktifkan di Pengaturan.', 'warning');

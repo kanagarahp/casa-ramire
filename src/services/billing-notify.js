@@ -1,7 +1,7 @@
-import { sendBillingEmail } from './email.js';
-import { createBillPaymentLink, createInvoicePaymentLink } from './payments.js';
-import { getSettings, isDokuEnabled } from './settings.js';
 import { getState } from '../core/store.js';
+import { sendInvoiceEmail } from './invoice.js';
+import { createBillPaymentLink, createInvoicePaymentLink } from './payments.js';
+import { isDokuEnabled } from './settings.js';
 
 function tenantEmail(tenantId) {
   if (!tenantId) return '';
@@ -25,8 +25,9 @@ async function paymentLinkForInvoice(invoice) {
 }
 
 /**
- * Email a rent bill. DOKU is only used when the owner enables it in Settings;
- * otherwise the email contains the bill details and payment instructions.
+ * Email a rent bill with the invoice PDF attached. DOKU is only used when the
+ * owner enables it in Settings; otherwise the email contains payment
+ * instructions and a bank transfer summary.
  */
 export async function sendBillByEmail(bill) {
   const to = recipientEmail(bill);
@@ -35,20 +36,16 @@ export async function sendBillByEmail(bill) {
   }
 
   const link = await paymentLinkForBill(bill);
-  const delivery = await sendBillingEmail({
+  const delivery = await sendInvoiceEmail({
+    type: 'bill',
+    id: bill.id,
+    mode: 'billing',
     to,
-    name: bill.tenantName || 'Kak',
-    title: `Tagihan ${bill.type || 'Sewa'} Kamar ${bill.roomNumber || '—'}`,
-    invoiceNumber: bill.number || link?.invoiceNumber || '',
-    description: bill.description || '',
-    amount: bill.amount,
-    dueDate: bill.dueDate,
     paymentUrl: link?.paymentUrl || '',
     expiresAt: link?.expiresAt || '',
-    paymentInstructions: getSettings().paymentInstructions || '',
   });
 
-  return { link, delivery };
+  return { link, delivery: { ...delivery, sent: true } };
 }
 
 export async function sendInvoiceByEmail(invoice) {
@@ -58,18 +55,14 @@ export async function sendInvoiceByEmail(invoice) {
   }
 
   const link = await paymentLinkForInvoice(invoice);
-  const delivery = await sendBillingEmail({
+  const delivery = await sendInvoiceEmail({
+    type: 'invoice',
+    id: invoice.id,
+    mode: 'billing',
     to,
-    name: invoice.tenantName || 'Kak',
-    title: `Invoice ${invoice.item || 'Layanan'}`,
-    invoiceNumber: invoice.number || link?.invoiceNumber || '',
-    description: invoice.item || '',
-    amount: invoice.amount,
-    dueDate: invoice.dueDate,
     paymentUrl: link?.paymentUrl || '',
     expiresAt: link?.expiresAt || '',
-    paymentInstructions: getSettings().paymentInstructions || '',
   });
 
-  return { link, delivery };
+  return { link, delivery: { ...delivery, sent: true } };
 }

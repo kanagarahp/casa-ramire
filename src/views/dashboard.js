@@ -2,6 +2,7 @@ import { formatDate, formatDateTime, rupiah, todayISO, waLink } from '../core/fo
 import { getState } from '../core/store.js';
 import { hasApiAuth } from '../services/auth.js';
 import { getBill } from '../services/billing.js';
+import { openInvoicePreview } from '../services/invoice.js';
 import { createBillPaymentLink, openPaymentLinkModal } from '../services/payments.js';
 import { clearRenewalPending } from '../services/property.js';
 import { getCashflowTrend, getDashboardStats } from '../services/reports.js';
@@ -161,6 +162,7 @@ function overdueRows(entries) {
             <div class="flex items-center gap-2 ml-auto">
               <span class="badge-red normal-case tracking-normal">${overdueLabel(daysOverdue)}</span>
               <a href="${waLink(tenant.phone, message)}" target="_blank" rel="noopener" class="btn-ghost btn-xs text-emerald-700" title="Kirim tagihan WhatsApp">${icon('MessageCircle', 'w-4 h-4')}</a>
+              <button type="button" class="btn-outline btn-xs" data-action="invoice" data-id="${bills[0].id}">${icon('FileText', 'w-3 h-3')} Invoice</button>
               ${doku ? `<button type="button" class="btn-outline btn-xs" data-action="doku-link" data-id="${bills[0].id}">${icon('CreditCard', 'w-3 h-3')} Link DOKU</button>` : ''}
               <button type="button" class="btn-primary btn-xs" data-action="verify-overdue" data-id="${bills[0].id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
             </div>
@@ -372,6 +374,7 @@ export function render(root) {
                             <td>${billBadge(bill.status)}</td>
                             <td>
                               <div class="flex items-center justify-end gap-1">
+                                <button type="button" class="btn-outline btn-xs" data-action="invoice" data-id="${bill.id}" title="Tampilkan invoice">${icon('FileText', 'w-3 h-3')} Invoice</button>
                                 <button type="button" class="btn-primary btn-xs" data-action="verify" data-id="${bill.id}">${icon('ShieldCheck', 'w-3 h-3')} Verifikasi</button>
                                 ${bill.phone ? `<a href="${waLink(bill.phone, message)}" target="_blank" rel="noopener" class="btn-ghost btn-xs text-emerald-700" title="Kirim tagihan via WhatsApp">${icon('MessageCircle', 'w-4 h-4')}</a>` : ''}
                               </div>
@@ -455,6 +458,9 @@ export function render(root) {
           }),
         )
         .catch((error) => toast(error.message, 'error'));
+    }
+    if (action === 'invoice') {
+      openInvoicePreview({ type: 'bill', id: Number(target.dataset.id) });
     }
     if (action === 'verify' || action === 'verify-overdue') {
       openVerifyModal({ kind: 'bill', id: Number(target.dataset.id) });

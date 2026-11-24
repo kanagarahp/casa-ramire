@@ -179,7 +179,7 @@ export function openSettingsModal() {
               <div>
                 <label class="label" for="set-notification-email">Email notifikasi admin</label>
                 <input id="set-notification-email" type="email" class="input" value="${esc(settings.notificationEmail || 'casaramirejogja@gmail.com')}" placeholder="casaramirejogja@gmail.com" />
-                <p class="hint mt-1">Booking online, tagihan H-7, konfirmasi pembayaran/DP, dan kode reset password owner dikirim ke email ini.</p>
+                <p class="hint mt-1">Booking online, tagihan H-3, konfirmasi pembayaran/DP, dan kode reset password owner dikirim ke email ini.</p>
               </div>
               <div class="rounded-xl border border-line bg-cream/60 p-3 space-y-3">
                 <p class="text-[11px] font-extrabold uppercase tracking-wider text-stone-500">Rekening pembayaran</p>
@@ -197,7 +197,7 @@ export function openSettingsModal() {
                   <label class="label" for="set-bank-account-number">Nomor rekening</label>
                   <input id="set-bank-account-number" type="text" inputmode="numeric" class="input font-mono" value="${esc(settings.bankAccountNumber || '700013745877')}" placeholder="700013745877" />
                 </div>
-                <p class="hint">Rekening ini tampil di landing page, email booking online, tagihan, dan pengingat H-7.</p>
+                <p class="hint">Rekening ini tampil di landing page, email booking online, tagihan, dan pengingat H-3.</p>
               </div>
               <div>
                 <label class="label" for="set-parking-capacity">Kapasitas parkir mobil</label>
@@ -219,9 +219,9 @@ export function openSettingsModal() {
               <div class="flex flex-wrap gap-2">
                 <button type="submit" class="btn-primary btn-sm">${icon('Save', 'w-4 h-4')} Simpan pengaturan</button>
                 <button type="button" class="btn-outline btn-sm" data-action="test-email">${icon('Send', 'w-4 h-4')} Kirim email tes</button>
-                <button type="button" class="btn-outline btn-sm" data-action="run-reminders">${icon('Clock', 'w-4 h-4')} Kirim pengingat H-7</button>
+                <button type="button" class="btn-outline btn-sm" data-action="run-reminders">${icon('Clock', 'w-4 h-4')} Kirim pengingat H-3</button>
               </div>
-              <p class="hint">Pengiriman email memerlukan <code class="font-mono">RESEND_API_KEY</code> dan <code class="font-mono">EMAIL_FROM</code> di environment Vercel. Pengingat H-7 juga berjalan otomatis lewat cron harian.</p>
+              <p class="hint">Pengiriman email memerlukan <code class="font-mono">RESEND_API_KEY</code> dan <code class="font-mono">EMAIL_FROM</code> di environment Vercel. Pengingat H-3 juga berjalan otomatis lewat cron harian.</p>
             </form>
           `,
         })}
@@ -349,11 +349,11 @@ export function openSettingsModal() {
         try {
           const result = await runBillingReminders({ force: true, silent: true });
           if (!result?.sent && result?.checked === 0) {
-            toast('Tidak ada tagihan yang jatuh tempo 7 hari lagi.', 'warning');
+            toast('Tidak ada tagihan yang jatuh tempo 3 hari lagi.', 'warning');
           } else if (!result?.sent) {
             toast(`Pengingat selesai. Terkirim: ${result?.sent || 0}, gagal: ${result?.failed || 0}.`, 'warning');
           } else {
-            toast(`${result.sent} pengingat tagihan H-7 dikirim.`);
+            toast(`${result.sent} pengingat tagihan H-3 dikirim.`);
           }
         } catch (error) {
           toast(error.message, 'error');

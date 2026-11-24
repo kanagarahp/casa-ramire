@@ -43,6 +43,21 @@ export default async function handler(req, res) {
   const subject = asString(body?.subject, 200);
   const text = asString(body?.text, 20_000);
   const html = asString(body?.html, 40_000);
+  const attachments = Array.isArray(body?.attachments)
+    ? body.attachments
+        .filter(
+          (item) =>
+            item &&
+            typeof item.filename === 'string' &&
+            typeof item.content === 'string' &&
+            item.content.length < 12_000_000,
+        )
+        .slice(0, 5)
+        .map((item) => ({
+          filename: item.filename.slice(0, 160),
+          content: item.content,
+        }))
+    : [];
 
   if (!isEmail(to)) return sendJson(res, 400, { error: 'Alamat email penerima tidak valid.' });
   if (!subject) return sendJson(res, 400, { error: 'Subjek email wajib diisi.' });
@@ -63,6 +78,7 @@ export default async function handler(req, res) {
         subject,
         ...(text ? { text } : {}),
         ...(html ? { html } : {}),
+        ...(attachments.length ? { attachments } : {}),
         reply_to: String(
           process.env.EMAIL_REPLY_TO || 'casaramirejogja@gmail.com',
         ),
