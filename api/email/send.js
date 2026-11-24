@@ -20,7 +20,9 @@ function isEmail(value) {
  *   EMAIL_FROM       verified sender, e.g. "Casa Ramire <no-reply@casaramire.com>"
  */
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  if (!['GET', 'POST'].includes(req.method)) {
+    return methodNotAllowed(res, ['GET', 'POST']);
+  }
   if (!(await requireAdmin(req, res))) return;
 
   const apiKey = String(process.env.RESEND_API_KEY || '').trim();
@@ -30,6 +32,35 @@ export default async function handler(req, res) {
         'Pengiriman email belum dikonfigurasi. Tambahkan RESEND_API_KEY (dan EMAIL_FROM) di environment Vercel.',
       code: 'EMAIL_NOT_CONFIGURED',
     });
+  }
+
+  if (req.method === 'GET') {
+    const url = new URL(req.url || '/', 'http://localhost');
+    const id = asString(url.searchParams.get('id'), 120);
+    if (!id) return sendJson(res, 400, { error: 'ID email wajib diisi.' });
+
+    try {
+      const response = await fetch(
+        `https://api.resend.com/emails/${encodeURIComponent(id)}`,
+        {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(15_000),
+          cache: 'no-store',
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return sendJson(res, response.status, {
+          error: payload?.message || 'Gagal membaca status email dari Resend.',
+        });
+      }
+      return sendJson(res, 200, { ok: true, email: payload });
+    } catch (error) {
+      console.error('[email] gagal membaca status', error);
+      return sendJson(res, 502, {
+        error: 'Layanan Resend tidak dapat dihubungi.',
+      });
+    }
   }
 
   let body;
