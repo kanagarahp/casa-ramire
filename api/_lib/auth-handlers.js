@@ -334,7 +334,9 @@ export async function handleUsers(req, res) {
 
       const removingOwner =
         current.role === 'owner' && (role !== 'owner' || !active);
-      if (removingOwner) {
+      // The installation admin key can always recover from a locked-out
+      // owner list; regular tokens must keep at least one active owner.
+      if (removingOwner && auth.kind !== 'admin') {
         const otherOwners = await countActiveOwners(current.id);
         if (!otherOwners) {
           return sendJson(res, 409, {
@@ -377,7 +379,7 @@ export async function handleUsers(req, res) {
         });
       }
 
-      if (target.rows[0].role === 'owner') {
+      if (target.rows[0].role === 'owner' && auth.kind !== 'admin') {
         const otherOwners = await countActiveOwners(id);
         if (!otherOwners) {
           return sendJson(res, 409, {
