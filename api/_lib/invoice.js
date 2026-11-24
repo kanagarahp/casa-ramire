@@ -1,4 +1,9 @@
-import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
+import {
+  LineCapStyle,
+  PDFDocument,
+  StandardFonts,
+  rgb,
+} from 'pdf-lib';
 
 const PAGE = { width: 595.28, height: 841.89, margin: 40 };
 const HEADER_HEIGHT = 112;
@@ -6,6 +11,7 @@ const HEADER_HEIGHT = 112;
 const COLORS = {
   dark: rgb(31 / 255, 57 / 255, 56 / 255),
   gold: rgb(212 / 255, 163 / 255, 89 / 255),
+  logoGold: rgb(201 / 255, 154 / 255, 74 / 255),
   white: rgb(1, 1, 1),
   text: rgb(41 / 255, 37 / 255, 36 / 255),
   gray: rgb(120 / 255, 113 / 255, 108 / 255),
@@ -15,6 +21,23 @@ const COLORS = {
   greenSoft: rgb(236 / 255, 253 / 255, 245 / 255),
   red: rgb(190 / 255, 18 / 255, 60 / 255),
   line: rgb(231 / 255, 229 / 255, 228 / 255),
+};
+
+const BRAND_PATHS = {
+  house:
+    'M 330 430 L 330 230 L 512 90 L 672 232 L 648 256 L 648 430',
+  houseBottom: 'M 330 430 C 390 485 590 485 648 430',
+  stems: [
+    'M 468 468 L 545 292',
+    'M 505 398 L 632 330',
+    'M 525 392 L 612 432',
+  ],
+  leaves: [
+    'M 515 365 C 500 305 512 215 562 170 C 598 225 590 315 548 355 Z',
+    'M 505 360 C 465 325 415 292 388 278 C 414 330 460 368 500 388 Z',
+    'M 548 360 C 598 325 648 305 680 305 C 660 352 610 388 560 395 Z',
+    'M 535 410 C 585 393 638 403 678 435 C 625 466 575 450 532 425 Z',
+  ],
 };
 
 function toNumber(value) {
@@ -412,7 +435,7 @@ function invoiceEmailHtml({ invoice, paid, heading, intro, note, paymentUrl = ''
       <div style="max-width:640px;margin:0 auto;padding:24px 12px;">
         <div style="border-radius:18px;overflow:hidden;background:#ffffff;border:1px solid #e7e5e4;">
           <div style="background:#1f3938;color:#ffffff;padding:26px 30px;">
-            <div style="font-size:12px;font-weight:700;letter-spacing:.18em;color:#d4a359;text-transform:uppercase;">${escapeHtml(property.name)}</div>
+            <div style="font-family:Georgia,'Times New Roman',serif;font-size:13px;font-weight:700;letter-spacing:.14em;color:#c99a4a;text-transform:uppercase;">${escapeHtml(property.name)}</div>
             <h1 style="margin:8px 0 0;font-size:24px;line-height:1.25;">${escapeHtml(heading)}</h1>
             <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#d6d3d1;">${escapeHtml(intro)}</p>
           </div>
@@ -457,73 +480,54 @@ function invoiceEmailHtml({ invoice, paid, heading, intro, note, paymentUrl = ''
   </html>`;
 }
 
-function drawLogo(page, font, bold, x, y) {
-  const width = 30;
-  const height = 36;
-  const stroke = 1.6;
+function drawBrandMark(page, { left, top, scale, wordmarkFont }) {
+  const originX = left - 300 * scale;
+  const originY = top + 60 * scale;
+  const origin = { x: originX, y: originY, scale };
 
-  const points = [
-    [x, y],
-    [x, y + height * 0.58],
-    [x + width / 2, y + height],
-    [x + width, y + height * 0.58],
-    [x + width, y],
-  ];
+  page.drawSvgPath(BRAND_PATHS.house, {
+    ...origin,
+    borderColor: COLORS.logoGold,
+    borderWidth: 14,
+    borderLineCap: LineCapStyle.Round,
+  });
+  page.drawSvgPath(BRAND_PATHS.houseBottom, {
+    ...origin,
+    borderColor: COLORS.logoGold,
+    borderWidth: 14,
+    borderLineCap: LineCapStyle.Round,
+  });
 
-  for (let index = 0; index < points.length - 1; index += 1) {
-    page.drawLine({
-      start: { x: points[index][0], y: points[index][1] },
-      end: { x: points[index + 1][0], y: points[index + 1][1] },
-      thickness: stroke,
-      color: COLORS.gold,
+  for (const leaf of BRAND_PATHS.leaves) {
+    page.drawSvgPath(leaf, { ...origin, color: COLORS.white });
+  }
+
+  // Stems sit above the leaves, like the brand mark.
+  for (const stem of BRAND_PATHS.stems) {
+    page.drawSvgPath(stem, {
+      ...origin,
+      borderColor: COLORS.white,
+      borderWidth: 8,
+      borderLineCap: LineCapStyle.Round,
     });
   }
-  page.drawLine({
-    start: { x: points[points.length - 1][0], y: points[points.length - 1][1] },
-    end: { x: points[0][0], y: points[0][1] },
-    thickness: stroke,
-    color: COLORS.gold,
+
+  const centerX = originX + 501 * scale;
+  const wordmark = 'CASA RAMIRE';
+  const wordmarkSize = 12.5;
+  const wordmarkWidth = wordmarkFont.widthOfTextAtSize(
+    wordmark,
+    wordmarkSize,
+  );
+  page.drawText(wordmark, {
+    x: centerX - wordmarkWidth / 2,
+    y: top - 60,
+    size: wordmarkSize,
+    font: wordmarkFont,
+    color: COLORS.logoGold,
   });
 
-  // Simple leaves inside the house mark.
-  page.drawEllipse({
-    x: x + width * 0.5,
-    y: y + height * 0.38,
-    xScale: 7,
-    yScale: 3,
-    color: COLORS.white,
-    rotate: degrees(-35),
-  });
-  page.drawEllipse({
-    x: x + width * 0.5,
-    y: y + height * 0.45,
-    xScale: 7,
-    yScale: 3,
-    color: COLORS.white,
-    rotate: degrees(35),
-  });
-  page.drawEllipse({
-    x: x + width * 0.33,
-    y: y + height * 0.32,
-    xScale: 6,
-    yScale: 2.6,
-    color: COLORS.white,
-    rotate: degrees(45),
-  });
-  page.drawEllipse({
-    x: x + width * 0.67,
-    y: y + height * 0.32,
-    xScale: 6,
-    yScale: 2.6,
-    color: COLORS.white,
-    rotate: degrees(-45),
-  });
-  page.drawLine({
-    start: { x: x + width * 0.5, y: y + height * 0.36 },
-    end: { x: x + width * 0.5, y: y + height * 0.14 },
-    thickness: 1.2,
-    color: COLORS.white,
-  });
+  return { centerX };
 }
 
 /**
@@ -534,6 +538,7 @@ export async function buildInvoicePdf(invoice) {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const timesBold = await doc.embedFont(StandardFonts.TimesRomanBold);
   const W = PAGE.width;
   const H = PAGE.height;
   const M = PAGE.margin;
@@ -567,25 +572,32 @@ export async function buildInvoicePdf(invoice) {
       color: COLORS.white,
     });
 
-    drawLogo(page, font, bold, right - 82, H - 78);
-    drawText('CASA RAMIRE', {
-      x: right,
-      y: H - 94,
-      size: 12,
-      useBold: true,
-      color: COLORS.gold,
-      align: 'right',
+    const brand = drawBrandMark(page, {
+      left: right - 70,
+      top: H - 6,
+      scale: 0.11,
+      wordmarkFont: timesBold,
     });
-    const contact = [invoice.property.whatsapp, invoice.property.email]
-      .filter(Boolean)
-      .join('  ·  ');
-    drawText(contact, {
-      x: right,
-      y: H - 105,
-      size: 7,
-      color: rgb(0.82, 0.82, 0.8),
-      align: 'right',
-    });
+    let contactY = H - 78;
+    if (invoice.property.whatsapp) {
+      drawText(`WA ${invoice.property.whatsapp}`, {
+        x: brand.centerX,
+        y: contactY,
+        size: 5.8,
+        color: rgb(0.82, 0.82, 0.8),
+        align: 'center',
+      });
+      contactY -= 8;
+    }
+    if (invoice.property.email) {
+      drawText(invoice.property.email, {
+        x: brand.centerX,
+        y: contactY,
+        size: 5.8,
+        color: rgb(0.82, 0.82, 0.8),
+        align: 'center',
+      });
+    }
   };
 
   const tableHeader = () => {
@@ -608,7 +620,7 @@ export async function buildInvoicePdf(invoice) {
     start: { x: M, y: y - 5 },
     end: { x: M + 38, y: y - 5 },
     thickness: 1.8,
-    color: COLORS.gold,
+    color: COLORS.logoGold,
   });
 
   if (invoice.status === 'paid') {

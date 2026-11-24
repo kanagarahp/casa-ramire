@@ -2,7 +2,7 @@ import { formatDate, rupiah, toNumber } from '../core/format.js';
 import { getState } from '../core/store.js';
 import { getApiAuthHeaders, hasApiAuth } from './auth.js';
 import { ensureSynced } from './sync.js';
-import { logoMark } from '../ui/brand.js';
+import { invoiceLogoMark } from '../ui/invoice-logo.js';
 import { esc, setBusy } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { openModal } from '../ui/modal.js';
@@ -222,14 +222,10 @@ function invoiceHtml(invoice) {
       <div style="max-width:720px;min-width:520px;margin:0 auto;background:#ffffff;box-shadow:0 18px 45px rgba(41,37,36,.16);">
         <div style="background:#1f3938;color:#ffffff;padding:24px 30px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px;">
           <div style="font-size:32px;line-height:1;font-weight:800;letter-spacing:-.03em;">Invoice</div>
-          <div style="text-align:right;">
-            <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;">
-              ${logoMark('w-11 h-11')}
-              <div>
-                <div style="color:#d4a359;font-weight:800;letter-spacing:.14em;font-size:13px;">CASA RAMIRE</div>
-                <div style="font-size:9px;color:#d6d3d1;margin-top:3px;">${esc(contact)}</div>
-              </div>
-            </div>
+          <div style="text-align:center;min-width:128px;">
+            ${invoiceLogoMark('w-12 h-14 mx-auto')}
+            <div style="color:#c99a4a;font-family:Georgia,'Times New Roman',serif;font-weight:700;letter-spacing:.12em;font-size:12px;margin-top:2px;white-space:nowrap;">CASA RAMIRE</div>
+            <div style="font-size:8px;color:#d6d3d1;margin-top:3px;line-height:1.3;max-width:150px;margin-left:auto;margin-right:auto;">${esc(contact)}</div>
           </div>
         </div>
 
